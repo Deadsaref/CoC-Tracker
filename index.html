@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>CoC Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" type="image/png" href="img/favicon.ico" />
+</head>
+<body>
+  <div id="tooltip"></div>
+  <div id="toastContainer" class="toast-container"></div>
+  <div class="tracker investigator-mode">
+    <header class="tracker-header">
+      <div class="header-top">
+        <div class="title-block">
+          <h1 class="app-title" id="appTitle">CoC Tracker</h1>
+          <span class="app-version">v0.45</span>
+        </div>
+      </div>
+      
+      <nav class="tabs-row">
+        <div class="mode-switch">
+          <button id="modeInvestigators" class="mode-tab active">Персонажи</button>
+          <button id="modeArsenal" class="mode-tab">Арсенал</button>
+          <button id="modeGrimoire" class="mode-tab">Гримуар</button>
+        </div>
+      </nav>
+      
+      <div class="header-actions">
+        <div class="header-actions-left">
+          <button id="newInvestigatorBtn" class="stat-btn investigator-only">Новый персонаж</button>
+          <button id="newDayBtn" class="stat-btn investigator-only">Новый день</button>
+        </div>
+        <div class="header-actions-right">
+          <button id="undoBtn" title="Откатить шаг" disabled class="stat-btn">⟲</button>
+          <button id="redoBtn" title="Повторить шаг" disabled class="stat-btn">⟳</button>
+        </div>
+      </div>
+    </header>
+    
+    <div class="add-form arsenal-only">
+      <input id="name" placeholder="Имя" />
+      <input id="hp" class="investigator-only" type="number" placeholder="ПЗ" />
+      <input id="armor" class="investigator-only" type="number" placeholder="Броня" />
+      <input id="str" class="investigator-only" placeholder="СИЛ">
+      <input id="con" class="investigator-only" placeholder="ВЫН">
+      <input id="siz" class="investigator-only" placeholder="ТЕЛ">
+      <input id="dex" class="investigator-only" type="number" placeholder="ЛВК" />
+      <input id="pow" class="investigator-only" type="number" placeholder="МОЩ" />
+      <input id="san" class="investigator-only" type="number" placeholder="РАС" />
+      <label class="arsenal-only bonus-toggle">
+        <input type="checkbox" id="weaponBonus">
+        <span class="bonus-toggle-track">
+          <span class="bonus-toggle-thumb"></span>
+        </span>
+        <span class="bonus-toggle-label">Бонус</span>
+      </label>
+      <input id="damage" class="arsenal-only" placeholder="Урон 1d10+2">
+      <input id="weaponRange" class="arsenal-only" placeholder="Дальность">
+      <input id="spellCost" class="grimoire-only" placeholder="Стоимость">
+      <input id="spellTime" class="grimoire-only" placeholder="Время сотворения">
+      <textarea id="spellDesc" class="grimoire-only spell-desc-input" placeholder="Описание заклинания"></textarea>
+      <button id="addBtn">Добавить</button>
+    </div>
+    
+    <div class="table-wrap">
+    <table>
+      <thead>
+        <tr> <!-- Тут заголовки -->
+          <th class="investigator-only"></th>
+          <th data-sort="name">Имя</th>
+          <th data-sort="hp" class="investigator-only">ПЗ</th>
+          <!-- <th data-sort="armor" class="investigator-only">Броня</th>
+          <th data-sort="str" class="investigator-only">СИЛ</th>
+          <th data-sort="con" class="investigator-only">ВЫН</th>
+          <th data-sort="siz" class="investigator-only">ТЕЛ</th> -->
+          <th data-sort="db" class="investigator-only">БкУ</th>
+          <th data-sort="dex" class="investigator-only">ЛВК</th>
+          <th data-sort="speed" class="investigator-only">Скор</th>
+          <th data-sort="san" class="investigator-only">РАС</th>
+          <th class="investigator-only">Бой</th>
+          <th class="arsenal-only">Бонус</th>
+          <th data-sort="damage" class="arsenal-only">Урон</th>
+          <th class="arsenal-only">Дальность</th>
+          <th data-sort="cost" class="grimoire-only">Стоимость</th>
+          <th data-sort="time" class="grimoire-only">Время сотворения</th>
+          <th>Заметка</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    </div>
+    <div class="import-export">
+      <span id="saveNameDisplay" class="save-name">Untitled</span>
+      <input id="saveNameInput" class="save-name-input" type="text" style="display:none" />
+      <button id="exportBtn" class="stat-btn">Экспорт</button>
+      <input type="file" id="importFile" accept="application/json" hidden>
+      <button id="importBtn" class="stat-btn">Импорт</button>
+    </div>
+  </div>
+
+  <!-- Радиальное меню состояний -->
+  <div id="stateMenuOverlay" class="state-overlay hidden">
+    <div class="state-menu">
+      <div class="state-center">
+        <input id="stateEffectInput" class="state-effect-input" type="number" min="1" placeholder="Ходы">
+      </div>
+      <button class="state-effect-btn pos-1" data-effect="unconscious" title="Без сознания"></button>
+      <button class="state-effect-btn pos-2" data-effect="amnesia" title="Амнезия"></button>
+      <button class="state-effect-btn pos-3" data-effect="rampage" title="Буйство"></button>
+      <button class="state-effect-btn pos-4" data-effect="disorder" title="Расстройство"></button>
+      <button class="state-effect-btn pos-5" data-effect="paranoia" title="Паранойя"></button>
+      <button class="state-effect-btn pos-6" data-effect="flee" title="Бегство"></button>
+      <button class="state-effect-btn pos-7" data-effect="emotional" title="Взрыв эмоций"></button>
+      <button class="state-effect-btn pos-8" data-effect="phobia" title="Фобия/мания"></button>
+      <button class="state-effect-btn pos-9" data-effect="injury" data-instant="true" title="Серьёзная рана"></button>
+      <button class="state-effect-btn pos-10" data-effect="madness" data-instant="true" title="Затаённое безумие"></button>
+    </div>
+  </div>
+
+  <!-- Кнопка и панель боя -->
+  <button id="combatToggle" class="combat-toggle" title="Бой">⚔</button>
+  <div id="combatPanel" class="combat-panel">
+    <div class="combat-round-display">
+      Раунд
+      <span id="combatRound" class="combat-round-number">0</span>
+    </div>
+    <button id="combatUp" class="combat-panel-btn" title="Предыдущий ход">↑</button>
+    <button id="combatDown" class="combat-panel-btn" title="Следующий ход">↓</button>
+    <button id="combatClearEffects" class="combat-panel-btn" title="Сбросить все состояния">🧹</button>
+    <button id="combatEnd" class="combat-panel-btn combat-end-btn" title="Закончить бой">✕</button>
+  </div>
+
+  <!-- Тут Ширма -->
+  <div id="keeperScreen" class="keeper-screen">
+  <h3>Ширма</h3>
+  <table>
+    <tbody id="keeperBody"></tbody>
+  </table>
+</div>
+  <div id="investigatorModal" class="modal hidden">
+    <div class="modal-overlay" onclick="closeInvestigatorModal()"></div>
+
+    <div class="modal-content">
+      <h2>Новый персонаж</h2>
+
+      <div class="modal-form">
+        <label>Имя <input id="modal-name" placeholder="Имя"></label>
+        <label>Броня <input id="modal-armor" type="number" placeholder="0" min="0"></label>
+        <label>СИЛ <input id="modal-str" type="number" placeholder="0" min="0"></label>
+        <label>ВЫН <input id="modal-con" type="number" placeholder="0" min="0"></label>
+        <label>ТЕЛ <input id="modal-siz" type="number" placeholder="0" min="0"></label>
+        <label>ЛВК <input id="modal-dex" type="number" placeholder="0" min="0"></label>
+        <label>МОЩ <input id="modal-pow" type="number" placeholder="0" min="0"></label>
+        <!-- <label>ПМ <input id="modal-mp" type="number" placeholder="МОЩ/5" min="0" disabled></label> -->
+        <label>РАС <input id="modal-san" type="number" placeholder="0" min="0"></label>
+        <label>Драка <input id="modal-brawl" type="number" placeholder="25" min="0"></label>
+        <label>Стрельба (пистолет) <input id="modal-handgun" type="number" placeholder="20" min="0"></label>
+        <label>Стрельба (винтовка) <input id="modal-rifle" type="number" placeholder="25" min="0"></label>
+        <label>Уклонение<input id="modal-dodge" type="number" placeholder="ЛВК/2"></label>
+        <label class="modal-note">Заметка <textarea id="modal-note" placeholder="Заметка" rows="2"></textarea></label>
+      </div>
+
+      <div class="modal-actions">
+        <button onclick="confirmAddInvestigator()">Создать</button>
+        <button onclick="closeInvestigatorModal()">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="editInvestigatorModal" class="modal hidden">
+    <div class="modal-overlay" onclick="closeEditInvestigatorModal()"></div>
+    <div class="modal-content">
+      <h2>Редактировать персонажа</h2>
+      <div class="modal-form">
+        <label>Имя <input id="edit-modal-name" placeholder="Имя"></label>
+        <label>ПЗ <input id="edit-modal-hp" type="number" placeholder="0" min="0"></label>
+        <label>Броня <input id="edit-modal-armor" type="number" placeholder="0" min="0"></label>
+        <label>СИЛ <input id="edit-modal-str" type="number" placeholder="0" min="0"></label>
+        <label>ВЫН <input id="edit-modal-con" type="number" placeholder="0" min="0"></label>
+        <label>ТЕЛ <input id="edit-modal-siz" type="number" placeholder="0" min="0"></label>
+        <label>ЛВК <input id="edit-modal-dex" type="number" placeholder="0" min="0"></label>
+        <label>Скорость <input id="edit-modal-speed" type="number" placeholder="Скорость"></label>
+        <label>МОЩ <input id="edit-modal-pow" type="number" placeholder="0" min="0"></label>
+        <!-- <label>ПМ <input id="edit-modal-mp" type="number" placeholder="МОЩ/5" min="0" disabled></label> -->
+        <label>РАС <input id="edit-modal-san" type="number" placeholder="0" min="0"></label>
+        <label>Драка <input id="edit-modal-brawl" type="number" placeholder="25" min="0"></label>
+        <label>Стрельба (пистолет) <input id="edit-modal-handgun" type="number" placeholder="20" min="0"></label>
+        <label>Стрельба (винтовка) <input id="edit-modal-rifle" type="number" placeholder="25" min="0"></label>
+        <label>Уклонение<input id="edit-modal-dodge" type="number" placeholder="ЛВК/2"></label>
+        <label class="modal-note">Заметка <textarea id="edit-modal-note" placeholder="Заметка" rows="2"></textarea></label>
+      </div>
+      <div class="modal-actions">
+        <button onclick="confirmEditInvestigator()">Сохранить</button>
+        <button onclick="cloneInvestigatorFromEdit()">Клонировать</button>
+        <button onclick="closeEditInvestigatorModal()">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно помощи (F1) -->
+  <div id="helpModal" class="modal hidden">
+    <div class="modal-overlay" onclick="closeHelpModal()"></div>
+    <div class="modal-content help-modal-content">
+      <h2>Об инструменте</h2>
+
+      <div class="help-tabs">
+        <button class="help-tab active" data-help-tab="changelog">Описание версии</button>
+        <button class="help-tab" data-help-tab="hotkeys">Горячие клавиши</button>
+        <button class="help-tab" data-help-tab="features">Возможности</button>
+      </div>
+
+      <div class="help-tab-panels">
+        <div class="help-tab-panel active" data-help-panel="changelog">
+          <pre id="helpChangelog" class="help-text help-changelog"></pre>
+        </div>
+
+        <div class="help-tab-panel" data-help-panel="hotkeys">
+          <div id="helpHotkeys" class="help-text help-hotkeys"></div>
+        </div>
+
+        <div class="help-tab-panel" data-help-panel="features">
+          <div class="help-text help-features" id="helpFeatures">
+            <details open>
+              <summary>Персонажи и характеристики</summary>
+              <p>Ведение списка персонажей, их характеристик, учет здоровья (ПЗ), рассудка (РАС), базовой скорости и заметок. Подсветка критически низкого РАС и всплывающие подсказки по характеристикам.</p>
+            </details>
+            <details>
+              <summary>Арсенал и гримуар</summary>
+              <p>Отдельные вкладки для оружия и заклинаний, привязка оружия и спеллов к персонажам, отображение урона с учётом бонуса к урону персонажа. Наполняйте вкладки оружием и спеллами, которые вы используете в игре.</p>
+            </details>
+            <details>
+              <summary>Бой и раунды</summary>
+              <p>Управление раундами боя, выделение активного участника, интеграция с состояниями персонажей и их длительностью.</p>
+            </details>
+            <details>
+              <summary>Состояния и эффекты</summary>
+              <p>Радиальное меню состояний открывается по ПКМ по персонажу и выбору состояния, управление длительностью эффектов в раундах, автоматический тик эффектов при переходе между раундами.</p>
+            </details>
+            <details>
+              <summary>Импорт, экспорт и снапшоты</summary>
+              <p>Экспорт/импорт состояния трекера в JSON, авто‑снапшоты в локальное хранилище для защиты от потерь данных.</p>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions help-modal-actions">
+        <button onclick="closeHelpModal()">Закрыть (Esc)</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

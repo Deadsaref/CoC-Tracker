@@ -1,0 +1,1074 @@
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: url('img/background.jpg') center/cover fixed;
+  color: #eee;
+  padding-left: clamp(12px, 4vw, 64px);
+  padding-right: clamp(12px, 4vw, 64px);
+  box-sizing: border-box;
+}
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-wrap table {
+  min-width: 920px; /* чтобы колонки не ломались на узких экранах */
+}
+
+@media (max-width: 720px) {
+  body {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .tracker {
+    margin: 12px auto;
+    padding: 12px;
+  }
+
+  .header-actions {
+    flex-wrap: wrap;
+  }
+
+  .add-form {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .table-wrap table {
+    min-width: 760px;
+  }
+
+  .state-menu {
+    width: min(92vw, 360px);
+    height: min(92vw, 360px);
+  }
+
+  .state-effect-btn {
+    width: 96px;
+    height: 96px;
+  }
+
+  .state-center {
+    width: 100px;
+    height: 100px;
+  }
+
+  .state-effect-input {
+    width: 64px;
+    height: 64px;
+  }
+}
+
+.tracker {
+  background: rgba(15, 15, 20, 0.92);
+  margin: 20px auto;
+  padding: 20px;
+  max-width: min(1600px, 96vw);
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 12px;
+}
+
+.tracker-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.title-block {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.app-title {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: 0.08em;
+}
+
+.app-version {
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ccc;
+  white-space: nowrap;
+}
+
+.tabs-row {
+  margin-top: 4px;
+}
+
+.mode-switch {
+  display: flex;
+  gap: 6px;
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 10px 14px;
+  background: radial-gradient(circle at top, #26262f, #14141b);
+  color: #cfcfd9;
+  border: 1px solid #3a3a45;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+}
+
+.mode-tab.active {
+  background: radial-gradient(circle at top, #5b4a24, #262016);
+  color: #ffe4a3;
+  box-shadow: 0 0 0 1px rgba(255, 228, 163, 0.28), 0 6px 14px rgba(0, 0, 0, 0.7);
+}
+
+.mode-tab:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6);
+}
+
+.header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.header-actions-left,
+.header-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.add-form {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin: 16px 0;
+}
+
+/* Арсенал: форма в одну строку */
+.tracker.arsenal-mode .add-form.arsenal-only {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.tracker.arsenal-mode .add-form.arsenal-only input,
+.tracker.arsenal-mode .add-form.arsenal-only label {
+  white-space: nowrap;
+}
+.import-export {
+  padding-top: 20px ;
+}
+input, button {
+  background: #222;
+  color: #eee;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+/* Кастомный чекбокс Бонуса в арсенале */
+.bonus-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.bonus-toggle input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.bonus-toggle-track {
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: #222;
+  border: 1px solid #444;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 2px;
+  box-sizing: border-box;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.bonus-toggle-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #666;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.bonus-toggle input[type="checkbox"]:checked + .bonus-toggle-track {
+  background: radial-gradient(circle at top, #5b4a24, #262016);
+  border-color: rgba(255, 228, 163, 0.7);
+}
+
+.bonus-toggle input[type="checkbox"]:checked + .bonus-toggle-track .bonus-toggle-thumb {
+  transform: translateX(16px);
+  background: #ffe4a3;
+}
+
+.bonus-toggle-label {
+  font-size: 14px;
+}
+
+/* Многострочное описание заклинания (стиль как у заметки) */
+.spell-desc-input {
+  resize: none;
+  width: 400px;
+  min-height: 36px;
+  max-height: 160px;
+  line-height: 1.3;
+  box-sizing: border-box;
+  border-radius: 6px;
+  padding: 6px 8px;
+  background-color: rgba(161, 134, 84, 0.55);
+  color: #dddddd;
+  border: 1px solid #444;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  border-bottom: 1px solid #333;
+  padding: 6px;
+  text-align: center;
+  vertical-align: middle;
+  transition: opacity 0.2s ease;
+}
+
+th {
+  cursor: pointer;
+  user-select: none;
+}
+
+tr.dragging {
+  opacity: 0.4;
+}
+
+/* по умолчанию скрываем */
+.tracker .investigator-only,
+.tracker .arsenal-only,
+.tracker .grimoire-only {
+  display: none;
+}
+
+/* режим сыщиков — сохраняем table-cell для выравнивания колонок */
+.tracker.investigator-mode .investigator-only {
+  display: table-cell;
+}
+
+/* режим арсенала */
+.tracker.arsenal-mode .arsenal-only {
+  display: table-cell;
+}
+
+/* режим гримуара */
+.tracker.grimoire-mode th.grimoire-only,
+.tracker.grimoire-mode td.grimoire-only {
+  display: table-cell;
+}
+
+/* форма добавления заклинаний */
+.tracker.grimoire-mode .add-form {
+  display: grid;
+}
+.tracker.grimoire-mode .add-form .grimoire-only {
+  display: block;
+}
+
+/* Заметка в гримуаре шириной ~50% таблицы */
+.tracker.grimoire-mode .note {
+  width: 50%;
+}
+
+/* узкие колонки под кнопки (глаз, удалить) */
+.col-actions {
+  width: 1%;
+  min-width: 36px;
+  padding: 4px;
+}
+
+.highlight {
+  background: #ffcc66;
+  color: #000;
+}
+
+.san-alert {
+  background: #8b0000;
+  color: #fff;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1 }
+  50% { opacity: .6 }
+  100% { opacity: 1 }
+}
+
+.hp-incomplete {
+  animation: hpPulse 2s infinite;
+  background-color: rgba(139, 0, 0, 0.18);
+}
+
+@keyframes hpPulse {
+  0%   { background-color: rgba(139, 0, 0, 0.10); }
+  50%  { background-color: rgba(139, 0, 0, 0.26); }
+  100% { background-color: rgba(139, 0, 0, 0.10); }
+}
+
+.note {
+  width: 250px;
+}
+.note-content {
+  white-space: normal;
+  word-break: break-word;
+  min-height: 24px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 6px 8px;
+  line-height: 1.3;
+  background-color: rgba(161, 134, 84, 0.55);
+  color: #dddddd;
+}
+
+.tracker-row {
+  height: auto;
+}
+
+/* Эффекты состояний слева от имени */
+.effects-cell {
+  width: 0;
+  padding: 0;
+}
+
+.tracker.investigator-mode .effects-cell {
+  display: table-cell;
+}
+
+td.name {
+  position: relative;
+  padding-left: 40px;
+}
+
+.effects-stack {
+  position: absolute;
+  /* top: 50%; 
+  left: -4px;*/
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  z-index: 2;
+}
+
+.effect-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  margin-right: 4px;
+  border-radius: 999px;
+  background: rgba(120, 120, 160, 0.25);
+  border: 1px solid rgba(200, 200, 255, 0.5);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.effect-badge span.effect-label {
+  max-width: 90px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.effect-badge span.effect-count {
+  font-weight: 600;
+}
+
+.effect-badge.expired {
+  background: rgba(255, 210, 120, 0.2);
+  border-color: rgba(255, 230, 170, 0.9);
+  box-shadow: 0 0 6px rgba(255, 230, 170, 0.6);
+}
+
+/* Выделение активной строки в бою */
+.tracker-row.combat-selected {
+  background-color: rgba(255, 212, 120, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 228, 163, 0.6);
+}
+
+.keeper-screen {
+  opacity: 0.55;
+  margin: 24px auto;
+  max-width: min(1100px, 90vw);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.eye-btn {
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.eye-btn:hover {
+  opacity: 1;
+  background-color: #666;
+}
+
+.remove-btn:hover {
+  background-color: rgba(139, 0, 0, 0.63);
+  opacity: 1;
+}
+
+.stat-btn {
+  transition: transform 0.1s ease, background-color 0.15s ease;
+}
+
+.stat-btn:hover {
+  background-color: #666;
+}
+
+.stat-btn:active {
+  transform: scale(0.9);
+}
+
+.stat-value {
+  display: inline-block;
+  min-width: 24px;
+  text-align: center;
+}
+
+.stat-animate {
+  animation: statPop 0.25s ease;
+}
+
+@keyframes statPop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+.speed-cell {
+  white-space: nowrap;
+}
+.speed-cell.speed-low {
+  background-color: rgba(180, 50, 50, 0.5);
+  color: #ffcccc;
+}
+.speed-cell.speed-high {
+  background-color: rgba(50, 120, 60, 0.5);
+  color: #ccffcc;
+}
+.speed-btn.speed-btn-locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #444;
+}
+.speed-btn.speed-btn-locked:hover {
+  background-color: #444;
+}
+
+.name-content {
+  min-width: 80px;
+  display: block;          /* 🔑 критично */
+  min-height: 1.2em;       /* 🔑 иначе строка схлопывается */
+  line-height: 1.2;
+  color: inherit;          /* 🔑 чтобы не стал прозрачным */
+  cursor: default;
+  padding: 2px 4px;
+}
+
+.name-content:focus {
+  outline: none;
+  background: rgba(255,255,255,0.1);
+}
+
+.name-content.editing {
+  cursor: text;
+  background: rgba(255,255,255,0.15);
+  outline: 1px dashed rgba(255,255,255,0.4);
+}
+
+.weapons-cell {
+  position: relative;
+  min-width: 120px;
+  max-width: 400px;
+  width: 300px;
+}
+
+.weapon-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.weapon-tag {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 12px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.weapon-tag.spell-tag {
+  background: radial-gradient(circle at top, rgba(120, 80, 200, 0.4), rgba(20, 10, 40, 0.9));
+  border-color: rgba(190, 160, 255, 0.8);
+  box-shadow: 0 0 8px rgba(140, 100, 255, 0.8);
+}
+
+.weapon-tag button {
+  margin-left: 4px;
+  cursor: pointer;
+}
+
+.weapon-input {
+  width: 50%;
+  font-size: 12px;
+}
+
+.weapon-suggestions {
+  position: absolute;
+  z-index: 10;
+  background: #111;
+  border: 1px solid #444;
+  width: 100%;
+  animation: fadeIn .12s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.weapon-suggestion {
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+.weapon-suggestions:empty {
+  display: none;
+}
+
+.weapon-suggestion:hover {
+  background: #333;
+}
+
+.weapon-suggestion.selected {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.inline-edit {
+  width: 100%;
+  box-sizing: border-box;
+  background: #111;
+  color: #eee;
+  border: 1px solid #555;
+  font-size: inherit;
+}
+
+#tooltip {
+  position: fixed;
+  background: rgba(20,20,20,0.95);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s ease, transform .15s ease;
+  z-index: 9998;
+  white-space: pre-line; /* show \n as line breaks */
+}
+
+#tooltip.spell-tooltip {
+  background:
+    radial-gradient(circle at top, rgba(120, 80, 200, 0.9), rgba(20, 10, 40, 0.95));
+  border: 1px solid rgba(190, 160, 255, 0.7);
+  box-shadow: 0 0 16px rgba(140, 100, 255, 0.8);
+}
+
+/* отдельный класс для тултипов оружия (можно слегка отличить от дефолтного при желании) */
+#tooltip.weapon-tooltip {
+}
+
+.inv-tooltip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inv-tooltip-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: #ffd479;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+
+.inv-tooltip-stats,
+.inv-tooltip-skills {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 12px;
+  font-size: 13px;
+}
+
+#tooltip.visible {
+  pointer-events: auto;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;              /* top:0 right:0 bottom:0 left:0 */
+  z-index: 9999;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.modal-content {
+  position: relative;
+  z-index: 1;
+
+  background:
+    linear-gradient(
+      rgba(20,20,20,0.92),
+      rgba(20,20,20,0.92)
+    ),
+    url("img/yellowsign.png");
+  background-size: 100%;
+  background-repeat: no-repeat;
+  background-position: center 20px;
+  text-shadow: 0 0 2px rgba(255,220,120,0.1);
+  color: #eee;
+  
+
+  padding: 24px;
+  border-radius: 12px;
+  width: 420px;
+  max-height: 90vh;
+  overflow-y: auto;
+
+  box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+}
+
+.modal-content h2 {
+  color: #ffd479;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.modal-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  margin: 16px 0;
+  align-items: center;
+}
+
+.modal-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #bbb;
+}
+
+.modal-form label.modal-note {
+  grid-column: 1 / -1;
+}
+
+.modal-form input,
+.modal-form textarea {
+  padding: 8px;
+  background: #222;
+  border: 1px solid #444;
+  border-radius: 6px;
+  color: #eee;
+  font-size: 14px;
+}
+
+.modal-form textarea {
+  resize: vertical;
+  min-height: 48px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+/* Help modal */
+.help-modal-content {
+  max-width: 720px;
+}
+
+.help-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.help-tab {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.help-tab.active {
+  background: rgba(255, 255, 255, 0.06);
+  opacity: 1;
+}
+
+.help-tab-panels {
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.help-tab-panel {
+  display: none;
+}
+
+.help-tab-panel.active {
+  display: block;
+}
+
+.help-text {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.help-changelog {
+  white-space: pre-wrap;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+.help-hotkeys dl {
+  margin: 0;
+}
+
+.help-hotkeys dt {
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.help-hotkeys dd {
+  margin: 0 0 4px 0;
+  opacity: 0.9;
+}
+
+.help-features details {
+  margin-bottom: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.help-features summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.help-features p {
+  margin: 4px 0 0;
+}
+
+.help-modal-actions {
+  justify-content: flex-end;
+}
+
+/* Тосты (уведомления отмена/повтор) */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.toast {
+  background: rgba(20, 20, 25, 0.96);
+  color: #eee;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  animation: toastIn 0.25s ease;
+  max-width: 320px;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Бой: плавающая кнопка и вертикальное меню */
+.combat-toggle {
+  position: fixed;
+  right: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #ffe4a3;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  backdrop-filter: blur(4px);
+  z-index: 9001;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.7);
+}
+
+.combat-toggle:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.combat-panel {
+  position: fixed;
+  right: 84px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(15, 15, 20, 0.98);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+  z-index: 9000;
+}
+
+.combat-panel.open {
+  display: flex;
+}
+
+.combat-round-display {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #aaa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.combat-round-number {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffd479;
+  min-width: 1.5em;
+  text-align: right;
+}
+
+.combat-panel-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  padding: 0;
+}
+
+.combat-end-btn {
+  background: rgba(139, 0, 0, 0.8);
+  border-color: rgba(255, 120, 120, 0.9);
+}
+
+.combat-end-btn:hover {
+  background: rgba(180, 20, 20, 0.9);
+}
+
+/* Радиальное меню состояний */
+.state-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.state-overlay.hidden {
+  display: none;
+}
+
+.state-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.state-menu {
+  position: relative;
+  width: 450px;
+  height: 450px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(40, 40, 60, 0.95), rgba(15, 15, 25, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.9);
+  transform: scale(0.9);
+  opacity: 0;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.state-overlay.visible .state-menu {
+  transform: scale(1);
+  opacity: 1;
+}
+
+.state-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(15, 15, 20, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.state-effect-input {
+  width: 72px;
+  height: 72px;
+  text-align: center;
+  border-radius: 50%;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.state-effect-btn {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  font-size: 18px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background-image: url("img/icons_radial.png");
+  background-repeat: no-repeat;
+}
+
+.state-effect-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Позиции 8 кнопок по кругу */
+.state-effect-btn.pos-1 { top: 8px; left: 37%;  background-position: -3px -3px;}
+.state-effect-btn.pos-2 { top: 47px; right: 50px; background-position: -129px -3px;}
+.state-effect-btn.pos-3 { top: 36%; right: 7px; background-position: -255px -3px;}
+.state-effect-btn.pos-4 { bottom: 54px; right: 53px; background-position: -381px -3px;}
+.state-effect-btn.pos-5 { bottom: 8px; left: 37%;  background-position: -3px -129px;}
+.state-effect-btn.pos-6 { bottom: 54px; left: 50px; background-position: -129px -129px;}
+.state-effect-btn.pos-7 { top: 36%; left: 7px; background-position: -255px -129px;}
+.state-effect-btn.pos-8 { top: 47px; left: 50px; background-position: -381px -129px;}
+.state-effect-btn.pos-9 { top: 430px; right: 4px; background-position: -3px -258px;}
+.state-effect-btn.pos-10 { top: 430px; left: 4px; background-position: -129px -258px; }
+
+.state-effect-btn:hover {
+  transform: scale(1.12);
+  filter: brightness(1.4);
+  box-shadow:
+    0 0 10px rgba(255,255,255,0.4),
+    0 0 20px rgba(255,255,255,0.2);
+}
+
+.state-effect-btn.selected {
+
+  transform: scale(0.92);
+  
+  filter: brightness(0.7);
+
+  box-shadow:
+    inset 0 3px 6px rgba(0,0,0,0.6);
+
+}
+

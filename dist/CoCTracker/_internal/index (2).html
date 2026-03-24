@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>CoC Tracker</title>
+  <link rel="stylesheet" href="vendor/flatpickr.min.css" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" type="image/png" href="img/favicon.ico" />
+</head>
+<body>
+  <div id="tooltip"></div>
+  <div id="toastContainer" class="toast-container"></div>
+  <div id="pywebviewFindBar" class="pywebview-find-bar" hidden>
+    <label class="pywebview-find-label" for="pywebviewFindInput">Поиск</label>
+    <input
+      type="search"
+      id="pywebviewFindInput"
+      class="pywebview-find-input"
+      autocomplete="off"
+      spellcheck="false"
+      placeholder="Найти на вкладке…"
+      enterkeyhint="search"
+    />
+    <span id="pywebviewFindCounter" class="pywebview-find-counter" aria-live="polite"></span>
+  </div>
+  <div class="tracker investigator-mode">
+    <header class="tracker-header">
+      <div class="header-top">
+        <div class="title-block">
+          <h1 class="app-title" id="appTitle">CoC Tracker</h1>
+          <span class="app-version">v0.48</span>
+        </div>
+      </div>
+      
+      <nav class="tabs-row">
+        <div class="mode-switch">
+          <button id="modeInvestigators" class="mode-tab active">Персонажи</button>
+          <button id="modeArsenal" class="mode-tab">Арсенал</button>
+          <button id="modeGrimoire" class="mode-tab">Гримуар</button>
+        </div>
+      </nav>
+      
+      <div class="header-actions">
+        <div class="header-actions-left">
+          <button id="newInvestigatorBtn" class="stat-btn investigator-only">Новый персонаж</button>
+          <div class="scene-menu-wrap">
+            <button
+              type="button"
+              id="sceneMenuToggle"
+              class="stat-btn scene-menu-toggle"
+              aria-expanded="false"
+              aria-controls="scenePanel"
+              aria-haspopup="dialog"
+              title="Сцена: дата, имя файла, экспорт и импорт"
+            >
+              <span class="scene-menu-toggle__main">Сцена</span>
+              <span id="sceneMenuSavePreview" class="scene-menu-toggle__name">Untitled</span>
+              <span class="scene-menu-toggle__chevron" aria-hidden="true">▾</span>
+            </button>
+            <div
+              id="scenePanel"
+              class="scene-panel"
+              role="dialog"
+              aria-labelledby="sceneMenuToggle"
+              hidden
+            >
+              <div class="scene-panel__section investigator-only">
+                <span class="scene-panel__label">Игровая дата</span>
+                <p class="scene-panel__hint">Календарь, день кампании и события</p>
+                <div class="scene-date-field">
+                  <input
+                    type="text"
+                    id="campaignDatePicker"
+                    class="campaign-date-picker-input"
+                    readonly
+                    title="Игровая дата: календарь, текущий день кампании и события"
+                    aria-label="Игровая дата"
+                  />
+                </div>
+              </div>
+              <div class="scene-panel__section">
+                <span class="scene-panel__label">Имя сцены</span>
+                <div class="scene-panel__save-row">
+                  <span id="saveNameDisplay" class="save-name">Untitled</span>
+                  <input id="saveNameInput" class="save-name-input" type="text" style="display:none" />
+                </div>
+                <p class="scene-panel__hint scene-panel__hint--sub">Двойной клик по имени — изменить</p>
+              </div>
+              <div class="scene-panel__actions">
+                <input type="file" id="importFile" accept="application/json" hidden />
+                <button type="button" id="exportBtn" class="stat-btn">Экспорт</button>
+                <button type="button" id="importBtn" class="stat-btn">Импорт</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="header-actions-right">
+          <div class="undo-redo-group" title="История изменений">
+            <button id="undoBtn" title="Откатить шаг" disabled class="stat-btn">⟲</button>
+            <button id="redoBtn" title="Повторить шаг" disabled class="stat-btn">⟳</button>
+          </div>
+        </div>
+      </div>
+    </header>
+    
+    <div class="add-form arsenal-only">
+      <input id="name" placeholder="Имя" />
+      <input id="hp" class="investigator-only" type="number" placeholder="ПЗ" />
+      <input id="armor" class="investigator-only" type="number" placeholder="Броня" />
+      <input id="str" class="investigator-only" placeholder="СИЛ">
+      <input id="con" class="investigator-only" placeholder="ВЫН">
+      <input id="siz" class="investigator-only" placeholder="ТЕЛ">
+      <input id="dex" class="investigator-only" type="number" placeholder="ЛВК" />
+      <input id="pow" class="investigator-only" type="number" placeholder="МОЩ" />
+      <input id="san" class="investigator-only" type="number" placeholder="РАС" />
+      <label class="arsenal-only bonus-toggle">
+        <input type="checkbox" id="weaponBonus">
+        <span class="bonus-toggle-track">
+          <span class="bonus-toggle-thumb"></span>
+        </span>
+        <span class="bonus-toggle-label">Бонус</span>
+      </label>
+      <input id="damage" class="arsenal-only" placeholder="Урон 1d10+2">
+      <input id="weaponRange" class="arsenal-only" placeholder="Дальность">
+      <input id="spellCost" class="grimoire-only" placeholder="Стоимость">
+      <input id="spellTime" class="grimoire-only" placeholder="Время сотворения">
+      <textarea id="spellDesc" class="grimoire-only spell-desc-input" placeholder="Описание заклинания"></textarea>
+      <button id="addBtn">Добавить</button>
+    </div>
+    
+    <div class="table-wrap">
+    <table>
+      <thead>
+        <tr> <!-- Тут заголовки -->
+          <th class="investigator-only"></th>
+          <th data-sort="name">Имя</th>
+          <th data-sort="hp" class="investigator-only">ПЗ</th>
+          <!-- <th data-sort="armor" class="investigator-only">Броня</th>
+          <th data-sort="str" class="investigator-only">СИЛ</th>
+          <th data-sort="con" class="investigator-only">ВЫН</th>
+          <th data-sort="siz" class="investigator-only">ТЕЛ</th> -->
+          <th data-sort="db" class="investigator-only">БкУ</th>
+          <th data-sort="dex" class="investigator-only">ЛВК</th>
+          <th data-sort="speed" class="investigator-only">Скор</th>
+          <th data-sort="san" class="investigator-only">РАС</th>
+          <th class="investigator-only">Бой</th>
+          <th class="arsenal-only">Бонус</th>
+          <th data-sort="damage" class="arsenal-only">Урон</th>
+          <th class="arsenal-only">Дальность</th>
+          <th data-sort="cost" class="grimoire-only">Стоимость</th>
+          <th data-sort="time" class="grimoire-only">Время сотворения</th>
+          <th>Заметка</th>
+          <th class="investigator-only col-actions" aria-label="Действия"></th>
+          <th class="arsenal-only col-actions" aria-label="Удалить"></th>
+          <th class="grimoire-only col-actions" aria-label="Удалить"></th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    </div>
+
+    <!-- Ширма (только вкладка «Персонажи» — см. .tracker.investigator-mode) -->
+    <div id="keeperScreen" class="keeper-screen">
+      <div class="keeper-screen-header">
+        <div class="keeper-label-wrap">
+          <button
+            type="button"
+            id="keeperMenuToggle"
+            class="keeper-rpg-label"
+            aria-expanded="false"
+            aria-controls="keeperSideMenu"
+            title="Меню ширмы"
+          >
+            Ширма
+          </button>
+          <aside
+            id="keeperSideMenu"
+            class="keeper-side-menu"
+            aria-hidden="true"
+            role="dialog"
+            aria-labelledby="keeperMenuToggle"
+          >
+            <div class="keeper-side-menu__panel">
+              <input type="file" id="keeperImportFile" accept="application/json" hidden />
+              <button type="button" id="keeperExportBtn" class="keeper-menu-btn" title="Экспорт скрытых персонажей" data-keeper-menu-item>
+                Экспорт
+              </button>
+              <button type="button" id="keeperImportBtn" class="keeper-menu-btn" title="Добавить персонажей из файла в ширму" data-keeper-menu-item>
+                Импорт
+              </button>
+              <button type="button" id="keeperClearBtn" class="keeper-menu-btn keeper-menu-btn--danger" title="Очистить ширму" data-keeper-menu-item>
+                Очистить
+              </button>
+              <button type="button" id="keeperMenuClose" class="keeper-menu-btn keeper-menu-btn--close" data-keeper-menu-item>
+                Свернуть
+              </button>
+            </div>
+          </aside>
+        </div>
+      </div>
+      <div id="keeperScreenList" class="keeper-screen-list"></div>
+    </div>
+  </div>
+
+  <!-- Радиальное меню состояний -->
+  <div id="stateMenuOverlay" class="state-overlay hidden">
+    <div class="state-menu">
+      <div class="state-center">
+        <input id="stateEffectInput" class="state-effect-input" type="number" min="1" placeholder="Ходы">
+      </div>
+      <button class="state-effect-btn pos-1" data-effect="unconscious" title="Без сознания"></button>
+      <button class="state-effect-btn pos-2" data-effect="amnesia" title="Амнезия"></button>
+      <button class="state-effect-btn pos-3" data-effect="rampage" title="Буйство"></button>
+      <button class="state-effect-btn pos-4" data-effect="disorder" title="Расстройство"></button>
+      <button class="state-effect-btn pos-5" data-effect="paranoia" title="Паранойя"></button>
+      <button class="state-effect-btn pos-6" data-effect="flee" title="Бегство"></button>
+      <button class="state-effect-btn pos-7" data-effect="emotional" title="Взрыв эмоций"></button>
+      <button class="state-effect-btn pos-8" data-effect="phobia" title="Фобия/мания"></button>
+      <button class="state-effect-btn pos-9" data-effect="injury" data-instant="true" title="Серьёзная рана"></button>
+      <button class="state-effect-btn pos-10" data-effect="madness" data-instant="true" title="Затаённое безумие"></button>
+    </div>
+  </div>
+
+  <!-- Кнопка и панель боя -->
+  <button id="combatToggle" class="combat-toggle" title="Бой">⚔</button>
+  <div id="combatPanel" class="combat-panel">
+    <div class="combat-round-display">
+      Раунд
+      <span id="combatRound" class="combat-round-number">0</span>
+    </div>
+    <button id="combatUp" class="combat-panel-btn" title="Предыдущий ход">↑</button>
+    <button id="combatDown" class="combat-panel-btn" title="Следующий ход">↓</button>
+    <button id="combatClearEffects" class="combat-panel-btn" title="Сбросить все состояния">🧹</button>
+    <button id="combatEnd" class="combat-panel-btn combat-end-btn" title="Закончить бой">✕</button>
+  </div>
+  <div id="investigatorModal" class="modal hidden">
+    <div class="modal-overlay" onclick="closeInvestigatorModal()"></div>
+
+    <div class="modal-content">
+      <h2>Новый персонаж</h2>
+
+      <div class="modal-form">
+        <label>Имя <input id="modal-name" placeholder="Имя"></label>
+        <label>Броня <input id="modal-armor" type="number" placeholder="0" min="0"></label>
+        <label>СИЛ <input id="modal-str" type="number" placeholder="0" min="0"></label>
+        <label>ВЫН <input id="modal-con" type="number" placeholder="0" min="0"></label>
+        <label>ТЕЛ <input id="modal-siz" type="number" placeholder="0" min="0"></label>
+        <label>ЛВК <input id="modal-dex" type="number" placeholder="0" min="0"></label>
+        <label>МОЩ <input id="modal-pow" type="number" placeholder="0" min="0"></label>
+        <!-- <label>ПМ <input id="modal-mp" type="number" placeholder="МОЩ/5" min="0" disabled></label> -->
+        <label>РАС <input id="modal-san" type="number" placeholder="0" min="0"></label>
+        <label>Драка <input id="modal-brawl" type="number" placeholder="25" min="0"></label>
+        <label>Стрельба (пистолет) <input id="modal-handgun" type="number" placeholder="20" min="0"></label>
+        <label>Стрельба (винтовка) <input id="modal-rifle" type="number" placeholder="25" min="0"></label>
+        <label>Уклонение<input id="modal-dodge" type="number" placeholder="ЛВК/2"></label>
+        <label class="modal-note">Заметка <textarea id="modal-note" placeholder="Заметка" rows="2"></textarea></label>
+      </div>
+
+      <div class="modal-actions">
+        <button onclick="confirmAddInvestigator()">Создать</button>
+        <button onclick="closeInvestigatorModal()">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="editInvestigatorModal" class="modal hidden">
+    <div class="modal-overlay" onclick="closeEditInvestigatorModal()"></div>
+    <div class="modal-content">
+      <h2>Редактировать персонажа</h2>
+      <div class="modal-form">
+        <label>Имя <input id="edit-modal-name" placeholder="Имя"></label>
+        <label>ПЗ <input id="edit-modal-hp" type="number" placeholder="0" min="0"></label>
+        <label>Броня <input id="edit-modal-armor" type="number" placeholder="0" min="0"></label>
+        <label>СИЛ <input id="edit-modal-str" type="number" placeholder="0" min="0"></label>
+        <label>ВЫН <input id="edit-modal-con" type="number" placeholder="0" min="0"></label>
+        <label>ТЕЛ <input id="edit-modal-siz" type="number" placeholder="0" min="0"></label>
+        <label>ЛВК <input id="edit-modal-dex" type="number" placeholder="0" min="0"></label>
+        <label>Скорость <input id="edit-modal-speed" type="number" placeholder="Скорость"></label>
+        <label>МОЩ <input id="edit-modal-pow" type="number" placeholder="0" min="0"></label>
+        <!-- <label>ПМ <input id="edit-modal-mp" type="number" placeholder="МОЩ/5" min="0" disabled></label> -->
+        <label>РАС <input id="edit-modal-san" type="number" placeholder="0" min="0"></label>
+        <label>Драка <input id="edit-modal-brawl" type="number" placeholder="25" min="0"></label>
+        <label>Стрельба (пистолет) <input id="edit-modal-handgun" type="number" placeholder="20" min="0"></label>
+        <label>Стрельба (винтовка) <input id="edit-modal-rifle" type="number" placeholder="25" min="0"></label>
+        <label>Уклонение<input id="edit-modal-dodge" type="number" placeholder="ЛВК/2"></label>
+        <label class="modal-note">Заметка <textarea id="edit-modal-note" placeholder="Заметка" rows="2"></textarea></label>
+      </div>
+      <div class="modal-actions">
+        <button onclick="confirmEditInvestigator()">Сохранить</button>
+        <button onclick="cloneInvestigatorFromEdit()">Клонировать</button>
+        <button onclick="closeEditInvestigatorModal()">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="deleteInvestigatorModal" class="modal hidden">
+    <div class="modal-overlay" onclick="closeDeleteInvestigatorModal()"></div>
+    <div class="modal-content delete-investigator-modal">
+      <p id="deleteInvestigatorMessage" class="delete-confirm-message"></p>
+      <div class="modal-actions">
+        <button id="deleteInvestigatorConfirmBtn" type="button" onclick="confirmDeleteInvestigator()">Да</button>
+        <button type="button" onclick="closeDeleteInvestigatorModal()">Нет</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно помощи (F1) -->
+  <div id="helpModal" class="modal hidden">
+    <div class="modal-overlay" onclick="closeHelpModal()"></div>
+    <div class="modal-content help-modal-content">
+      <h2>Об инструменте</h2>
+
+      <div class="help-tabs">
+        <button class="help-tab active" data-help-tab="changelog">Описание версии</button>
+        <button class="help-tab" data-help-tab="hotkeys">Горячие клавиши</button>
+        <button class="help-tab" data-help-tab="features">Возможности</button>
+      </div>
+
+      <div class="help-tab-panels">
+        <div class="help-tab-panel active" data-help-panel="changelog">
+          <pre id="helpChangelog" class="help-text help-changelog"></pre>
+        </div>
+
+        <div class="help-tab-panel" data-help-panel="hotkeys">
+          <div id="helpHotkeys" class="help-text help-hotkeys"></div>
+        </div>
+
+        <div class="help-tab-panel" data-help-panel="features">
+          <div class="help-text help-features" id="helpFeatures">
+            <details open>
+              <summary>Персонажи и характеристики</summary>
+              <p>Основной режим ведёт таблицу сыщиков: имя, ПЗ, бонус к урону (БкУ) от СИЛ и ТЕЛ, ЛВК, скорость движения, РАС, навыки боя в одной строке и текстовая заметка. Это опорная «карточка» для сессии: быстрый доступ к числам без бумажного листа.</p>
+              <p>ПЗ и РАС меняются кнопками «−»/«+»; по ПЗ и РАС при наведении показываются подсказки (в т.ч. максимумы и пороги). Если текущий РАС не выше четырёх пятых от сохранённого базового значения, ячейка подсвечивается; клик по ячейке делает текущий РАС новой базой и снимает предупреждение.</p>
+              <p>По клику на ЛВК включается отметка «буст» (подсветка): для сортировки и отображения инициативы персонаж временно считается быстрее — удобно помечать, кто действует первым в этом раунде, не переписывая число.</p>
+              <p>Скорость можно сдвигать на один шаг вверх или вниз от расчётного значения — для временных эффектов, ранений и домашних правил; пределы кнопок не дают уйти дальше одного модификатора.</p>
+              <p>Двойной клик по имени открывает редактирование всех полей; в этом же окне доступно клонирование строки. Строки можно перетаскивать, меняя порядок в таблице. Заголовки колонок задают сортировку (повторный клик — обратный порядок).</p>
+            </details>
+            <details>
+              <summary>Арсенал и гримуар</summary>
+              <p>Вкладки «Арсенал» и «Гримуар» хранят отдельные справочники: оружие (урон, дальность, флаг бонуса к урону) и заклинания (стоимость, время сотворения, описание). Их имеет смысл заполнять тем, что реально встречается в кампании — дальше вы привязываете записи к персонажам.</p>
+              <p>У сыщика в колонке «Бой» через поле ввода с подсказками добавляются теги оружия и заклинаний. Для оружия при наведении на тег показывается итоговая строка урона с учётом бонуса к урону персонажа (БкУ) и пометки «бонус» у записи в арсенале; для заклинаний — стоимость, время и текст из гримуара.</p>
+            </details>
+            <details>
+              <summary>Бой и раунды</summary>
+              <p>Режим боя включается с панели в шапке (есть горячие клавиши — см. вкладку «Горячие клавиши»). Пока бой идёт, в таблице выделяется текущий участник; счётчик показывает номер раунда.</p>
+              <p>Переход «к следующему» по списку строк двигает выделение вниз; после последней строки ход переходит к первой и номер раунда увеличивается. Движение вверх в начале списка возвращает к последнему участнику предыдущего раунда. Так вы ведёте порядок ходов и одновременно даёте приложению сигнал «сменился раунд».</p>
+              <p>Смена раунда (вперёд или назад) связана с таймерами состояний — см. следующий раздел. Отдельная кнопка сбрасывает все состояния у всех персонажей после подтверждения — на случай конца сцены или ошибки.</p>
+            </details>
+            <details>
+              <summary>Состояния и эффекты</summary>
+              <p>ПКМ по имени персонажа открывает радиальное меню типовых последствий провалов РАС и тяжёлых ситуаций (без сознания, амнезия, буйство, расстройство, паранойя, бегство, взрыв эмоций, фобия/мания, серьёзная рана, затаённое безумие). Уже активные варианты в меню недоступны, пока эффект не снят.</p>
+              <p>Два типа срабатывания. «Мгновенные» (серьёзная рана, затаённое безумие) добавляются одним кликом по сегменту — без ввода числа. Остальные после выбора просят ввести целое число ходов (раундов действия) и подтвердить Enter: столько полных циклов «мой ход прошёл по всем участникам» эффект будет отмечен на карточке.</p>
+              <p>Когда в бою счётчик раунда увеличивается на единицу, у всех таких эффектов оставшаяся длительность уменьшается на 1; при откате раунда назад — увеличивается. У мгновенных эффектов счётчик не показывается; у длительных на бейдже видно, сколько ходов осталось. Когда длительность доходит до нуля, бейдж становится «просроченным» — клик по нему удаляет метку, когда вы отыграли окончание эффекта.</p>
+            </details>
+            <details>
+              <summary>Сцена: календарь, имя файла, импорт и экспорт</summary>
+              <p>Меню «Сцена» задаёт имя текущего набора данных (как у файла сессии), открывает экспорт и импорт всего состояния трекера в JSON — для бэкапа, переноса на другой компьютер или версии под упаковкой в exe.</p>
+              <p>Блок «Игровая дата» доступен на вкладке персонажей: календарь кампании, текущий день и заметки по выбранным датам. Кнопка делает выбранную в календаре дату «сегодняшним» днём кампании. Если этот день позже предыдущего, у каждого сыщика базовый РАС переносится на текущее значение и снимается подсветка предупреждения — удобно между сессиями или после «отдыха» в сюжете.</p>
+              <p>Данные автоматически сохраняются в локальное хранилище браузера; в десктопной оболочке дополнительно периодически пишется автосейв на диск и при закрытии окна.</p>
+            </details>
+            <details>
+              <summary>Ширма, история правок и прочее</summary>
+              <p>Внизу экрана на вкладке «Персонажи» — панель ширмы: список скрытых карточек (например НПС до раскрытия). Запись можно показать в общей таблице или убрать обратно; отдельные импорт/экспорт и очистка относятся только к этому списку.</p>
+              <p>Кнопки с стрелками в шапке откатывают и повторяют последние изменения (Undo/Redo), чтобы исправить случайный клик без ручного восстановления из файла.</p>
+            </details>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions help-modal-actions">
+        <button onclick="closeHelpModal()">Закрыть (Esc)</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="vendor/flatpickr.min.js"></script>
+  <script src="vendor/ru.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

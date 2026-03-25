@@ -5,7 +5,7 @@ a = Analysis(
     ['app.py'],
     pathex=[],
     binaries=[],
-    datas=[('index.html', '.'), ('script.js', '.'), ('style.css', '.'), ('changelog.txt', '.'), ('img', 'img')],
+    datas=[('index.html', '.'), ('script.js', '.'), ('style.css', '.'), ('changelog.txt', '.'), ('img', 'img'), ('vendor', 'vendor')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

@@ -1,4 +1,5 @@
-('C:\\Зов Ктулху\\CoC tracker\\build\\CoCTracker\\CoCTracker.pkg',
+('C:\\Users\\user\\Yandex.Disk\\Компьютер DESKTOP-6971A30\\Зов Ктулху\\CoC '
+ 'tracker\\build\\CoCTracker\\CoCTracker.pkg',
  {'BINARY': True,
   'DATA': True,
   'EXECUTABLE': True,
@@ -10,46 +11,51 @@
   'SYMLINK': False},
  [('pyi-contents-directory _internal', '', 'OPTION'),
   ('PYZ-00.pyz',
-   'C:\\Зов Ктулху\\CoC tracker\\build\\CoCTracker\\PYZ-00.pyz',
+   'C:\\Users\\user\\Yandex.Disk\\Компьютер DESKTOP-6971A30\\Зов Ктулху\\CoC '
+   'tracker\\build\\CoCTracker\\PYZ-00.pyz',
    'PYZ'),
   ('struct',
-   'C:\\Зов Ктулху\\CoC tracker\\build\\CoCTracker\\localpycs\\struct.pyc',
+   'C:\\Users\\user\\Yandex.Disk\\Компьютер DESKTOP-6971A30\\Зов Ктулху\\CoC '
+   'tracker\\build\\CoCTracker\\localpycs\\struct.pyc',
    'PYMODULE'),
   ('pyimod01_archive',
-   'C:\\Зов Ктулху\\CoC '
+   'C:\\Users\\user\\Yandex.Disk\\Компьютер DESKTOP-6971A30\\Зов Ктулху\\CoC '
    'tracker\\build\\CoCTracker\\localpycs\\pyimod01_archive.pyc',
    'PYMODULE'),
   ('pyimod02_importers',
-   'C:\\Зов Ктулху\\CoC '
+   'C:\\Users\\user\\Yandex.Disk\\Компьютер DESKTOP-6971A30\\Зов Ктулху\\CoC '
    'tracker\\build\\CoCTracker\\localpycs\\pyimod02_importers.pyc',
    'PYMODULE'),
   ('pyimod03_ctypes',
-   'C:\\Зов Ктулху\\CoC '
+   'C:\\Users\\user\\Yandex.Disk\\Компьютер DESKTOP-6971A30\\Зов Ктулху\\CoC '
    'tracker\\build\\CoCTracker\\localpycs\\pyimod03_ctypes.pyc',
    'PYMODULE'),
   ('pyimod04_pywin32',
-   'C:\\Зов Ктулху\\CoC '
+   'C:\\Users\\user\\Yandex.Disk\\Компьютер DESKTOP-6971A30\\Зов Ктулху\\CoC '
    'tracker\\build\\CoCTracker\\localpycs\\pyimod04_pywin32.pyc',
    'PYMODULE'),
   ('pyiboot01_bootstrap',
-   'C:\\Users\\ognem\\AppData\\Local\\Programs\\Python\\Python310\\lib\\site-packages\\PyInstaller\\loader\\pyiboot01_bootstrap.py',
+   'C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python310\\lib\\site-packages\\PyInstaller\\loader\\pyiboot01_bootstrap.py',
    'PYSOURCE'),
   ('pyi_rth_inspect',
-   'C:\\Users\\ognem\\AppData\\Local\\Programs\\Python\\Python310\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_inspect.py',
+   'C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python310\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_inspect.py',
    'PYSOURCE'),
   ('pyi_rth_pkgutil',
-   'C:\\Users\\ognem\\AppData\\Local\\Programs\\Python\\Python310\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_pkgutil.py',
+   'C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python310\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_pkgutil.py',
    'PYSOURCE'),
   ('pyi_rth_multiprocessing',
-   'C:\\Users\\ognem\\AppData\\Local\\Programs\\Python\\Python310\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_multiprocessing.py',
+   'C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python310\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_multiprocessing.py',
    'PYSOURCE'),
   ('pyi_rth_setuptools',
-   'C:\\Users\\ognem\\AppData\\Local\\Programs\\Python\\Python310\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_setuptools.py',
+   'C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python310\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_setuptools.py',
    'PYSOURCE'),
   ('pyi_rth_pkgres',
-   'C:\\Users\\ognem\\AppData\\Local\\Programs\\Python\\Python310\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_pkgres.py',
+   'C:\\Users\\user\\AppData\\Local\\Programs\\Python\\Python310\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_pkgres.py',
    'PYSOURCE'),
-  ('app', 'C:\\Зов Ктулху\\CoC tracker\\app.py', 'PYSOURCE')],
+  ('app',
+   'C:\\Users\\user\\Yandex.Disk\\Компьютер DESKTOP-6971A30\\Зов Ктулху\\CoC '
+   'tracker\\app.py',
+   'PYSOURCE')],
  'python310.dll',
  True,
  False,

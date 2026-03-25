@@ -7,6 +7,11 @@ let saveName = localStorage.getItem('dmTrackerName') || 'Untitled';
 let sortState = { key: null, asc: true };
 let draggedRowId = null;
 
+/** Игровой «сегодня» кампании (YYYY-MM-DD) и события по датам */
+let campaignDateISO = null;
+let calendarEvents = [];
+let campaignDatePicker = null;
+
 // Состояние боя и UI в одном объекте
 const AppState = {
   combat: {
@@ -33,13 +38,226 @@ const EFFECT_DEFS = [
   { key: 'emotional', label: 'Взрыв эмоций' },
   { key: 'phobia', label: 'Фобия/мания' },
   { key: 'injury', label: 'Серьёзная рана' },
-  { key: 'madness', label: 'Затаённое безумие' },
+  { key: 'madness', label: 'Безумие' },
 ];
 
-load();
-setupUI();
-render();
+function todayISO() {
+  const n = new Date();
+  const y = n.getFullYear();
+  const m = String(n.getMonth() + 1).padStart(2, '0');
+  const d = String(n.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
+function formatDDMMYYYY(iso) {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '—';
+  const [y, mo, da] = iso.split('-');
+  return `${da}-${mo}-${y}`;
+}
+
+function normalizeCalendarEvents(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((e) => e && typeof e.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date))
+    .map((e) => ({
+      id: e.id || crypto.randomUUID(),
+      date: e.date,
+      text: typeof e.text === 'string' ? e.text.slice(0, 500) : '',
+    }));
+}
+
+function applyNewDaySanReset() {
+  rows.forEach((r) => {
+    if (r.mode === 'investigator') {
+      r.baseSan = r.san;
+      r.sanAlert = false;
+    }
+  });
+}
+
+function getPickerSelectedISO(fp) {
+  if (fp.selectedDates && fp.selectedDates[0]) {
+    return fp.formatDate(fp.selectedDates[0], 'Y-m-d');
+  }
+  return campaignDateISO || todayISO();
+}
+
+function applyCampaignDateFromPicker(fp, selExplicit) {
+  const sel =
+    selExplicit && /^\d{4}-\d{2}-\d{2}$/.test(selExplicit) ? selExplicit : getPickerSelectedISO(fp);
+  const prev = campaignDateISO;
+  if (sel === prev) return;
+  pushUndo('Смена дня кампании');
+  if (sel > prev) {
+    applyNewDaySanReset();
+  }
+  campaignDateISO = sel;
+  save();
+  render();
+  if (fp && typeof fp.redraw === 'function') fp.redraw();
+  refreshCampaignEventsPanel(fp);
+}
+
+function refreshCampaignEventsPanel(fp) {
+  if (!fp || !fp.calendarContainer) return;
+  const cal = fp.calendarContainer;
+  const wrap = cal.querySelector('.coc-calendar-events');
+  if (!wrap) return;
+  const campEl = wrap.querySelector('.coc-cal-campaign-val');
+  const browseEl = wrap.querySelector('.coc-cal-browse-val');
+  if (campEl) campEl.textContent = formatDDMMYYYY(campaignDateISO);
+  if (browseEl) browseEl.textContent = formatDDMMYYYY(getPickerSelectedISO(fp));
+
+  const iso = getPickerSelectedISO(fp);
+  const list = wrap.querySelector('.coc-calendar-events-list');
+  if (!list) return;
+  list.innerHTML = '';
+  calendarEvents
+    .filter((e) => e.date === iso)
+    .forEach((ev) => {
+      const li = document.createElement('li');
+      li.className = 'coc-calendar-event-item';
+      const span = document.createElement('span');
+      span.className = 'coc-calendar-event-text';
+      span.textContent = ev.text;
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'coc-calendar-event-del';
+      del.setAttribute('aria-label', 'Удалить событие');
+      del.textContent = '×';
+      del.addEventListener('click', () => {
+        pushUndo('Удаление события календаря');
+        calendarEvents = calendarEvents.filter((x) => x.id !== ev.id);
+        save();
+        fp.redraw();
+        refreshCampaignEventsPanel(fp);
+      });
+      li.appendChild(span);
+      li.appendChild(del);
+      list.appendChild(li);
+    });
+}
+
+function ensureCampaignEventsPanel(fp) {
+  const cal = fp.calendarContainer;
+  if (!cal || cal.querySelector('.coc-calendar-events')) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'coc-calendar-events';
+  wrap.innerHTML =
+    '<div class="coc-calendar-meta">' +
+    '<div class="coc-cal-line">Текущий день кампании: <strong class="coc-cal-campaign-val"></strong></div>' +
+    '<div class="coc-cal-line">События для выбранного дня: <strong class="coc-cal-browse-val"></strong></div>' +
+    '<button type="button" class="coc-cal-apply-btn stat-btn">Сделать выбранную дату текущим днём</button>' +
+    '</div>' +
+    '<div class="coc-calendar-events-head">Заметки на выбранный день</div>' +
+    '<ul class="coc-calendar-events-list" role="list"></ul>' +
+    '<div class="coc-calendar-events-add">' +
+    '<input type="text" class="coc-calendar-event-input" placeholder="Текст события" maxlength="500" />' +
+    '<button type="button" class="coc-calendar-event-add-btn stat-btn">Добавить</button>' +
+    '</div>';
+  cal.appendChild(wrap);
+
+  const inp = wrap.querySelector('.coc-calendar-event-input');
+  const btn = wrap.querySelector('.coc-calendar-event-add-btn');
+  const applyBtn = wrap.querySelector('.coc-cal-apply-btn');
+
+  const addFromInput = () => {
+    const text = (inp.value || '').trim();
+    if (!text) return;
+    const iso = getPickerSelectedISO(fp);
+    pushUndo('Событие календаря');
+    calendarEvents.push({ id: crypto.randomUUID(), date: iso, text });
+    inp.value = '';
+    save();
+    fp.redraw();
+    refreshCampaignEventsPanel(fp);
+  };
+
+  btn.addEventListener('click', addFromInput);
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addFromInput();
+    }
+  });
+  /* capture: true — до onClose Flatpickr, иначе setDate в onClose сбрасывает выбор и дата не меняется */
+  applyBtn.addEventListener(
+    'click',
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const sel = getPickerSelectedISO(fp);
+      applyCampaignDateFromPicker(fp, sel);
+    },
+    true
+  );
+}
+
+function onCampaignCalendarDayCreate(instance, dayElem) {
+  const dObj = dayElem && dayElem.dateObj;
+  if (!dObj || !instance) return;
+  const iso = instance.formatDate(dObj, 'Y-m-d');
+  if (calendarEvents.some((e) => e.date === iso)) {
+    dayElem.classList.add('coc-cal-has-event');
+  }
+  if (campaignDateISO && iso === campaignDateISO) {
+    dayElem.classList.add('coc-cal-campaign-day');
+  }
+}
+
+function syncCampaignDateToPicker() {
+  if (!campaignDatePicker) return;
+  if (!campaignDateISO) campaignDateISO = todayISO();
+  campaignDatePicker.setDate(campaignDateISO, false);
+}
+
+function setupCampaignDatePicker() {
+  const el = document.getElementById('campaignDatePicker');
+  if (!el || typeof flatpickr === 'undefined') return;
+  if (!campaignDateISO) campaignDateISO = todayISO();
+
+  const ruLocale =
+    typeof flatpickr !== 'undefined' && flatpickr.l10ns && flatpickr.l10ns.ru
+      ? flatpickr.l10ns.ru
+      : undefined;
+
+  campaignDatePicker = flatpickr(el, {
+    locale: ruLocale,
+    dateFormat: 'Y-m-d',
+    altInput: true,
+    altFormat: 'd-m-Y',
+    altInputClass: 'stat-btn investigator-only campaign-date-alt',
+    defaultDate: campaignDateISO,
+    allowInput: false,
+    clickOpens: true,
+    /* Иначе клик по дню закрывает календарь, срабатывает onClose и сбрасывает выбор на день кампании — просмотр/события для других дней невозможны */
+    closeOnSelect: false,
+    onOpen(selectedDates, dateStr, instance) {
+      ensureCampaignEventsPanel(instance);
+      instance.setDate(campaignDateISO, false);
+      refreshCampaignEventsPanel(instance);
+    },
+    onChange(selectedDates, dateStr, instance) {
+      refreshCampaignEventsPanel(instance);
+    },
+    onClose(selectedDates, dateStr, instance) {
+      if (instance && campaignDateISO) {
+        instance.setDate(campaignDateISO, false);
+      }
+    },
+    onMonthChange(selectedDates, dateStr, instance) {
+      ensureCampaignEventsPanel(instance);
+      refreshCampaignEventsPanel(instance);
+    },
+    onYearChange(selectedDates, dateStr, instance) {
+      ensureCampaignEventsPanel(instance);
+      refreshCampaignEventsPanel(instance);
+    },
+    onDayCreate(selectedDates, dateStr, instance, dayElem) {
+      onCampaignCalendarDayCreate(instance, dayElem);
+    },
+  });
+}
 
 function setupUI() {
   document.getElementById('addBtn').onclick = addRow;
@@ -79,6 +297,22 @@ function setupUI() {
       if (input) input.click();
     });
   }
+
+  const keeperExportBtn = document.getElementById('keeperExportBtn');
+  const keeperImportBtn = document.getElementById('keeperImportBtn');
+  const keeperImportFile = document.getElementById('keeperImportFile');
+  const keeperClearBtn = document.getElementById('keeperClearBtn');
+  if (keeperExportBtn) keeperExportBtn.addEventListener('click', exportKeeperScreenData);
+  if (keeperImportBtn && keeperImportFile) {
+    keeperImportBtn.addEventListener('click', () => keeperImportFile.click());
+  }
+  if (keeperImportFile) {
+    keeperImportFile.addEventListener('change', onKeeperImportFileChange);
+  }
+  if (keeperClearBtn) keeperClearBtn.addEventListener('click', clearKeeperScreen);
+
+  setupKeeperSideMenu();
+
   if (keeperScreen) {
     keeperScreen.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-action]');
@@ -89,6 +323,13 @@ function setupUI() {
       if (action === 'screen-show') {
         toggleHidden(id);
       } else if (action === 'screen-remove') {
+        if (mode === 'investigator') {
+          const row = rows.find(r => r.id === id && r.mode === 'investigator');
+          if (row) {
+            openDeleteInvestigatorModal(id);
+            return;
+          }
+        }
         removeRow(id);
       }
     });
@@ -109,6 +350,15 @@ function setupUI() {
       const tr = e.target.closest('tr[data-id]');
       if (!tr) return;
       const rowId = tr.dataset.id;
+
+      const hpIncompleteTd = e.target.closest('td.hp-incomplete');
+      if (hpIncompleteTd) {
+        if (!e.target.closest('[data-action="hp-dec"]') && !e.target.closest('[data-action="hp-inc"]')) {
+          restoreHpPrompt(rowId);
+          return;
+        }
+      }
+
       const actionEl = e.target.closest('[data-action]');
       if (!actionEl) return;
       const action = actionEl.dataset.action;
@@ -127,9 +377,18 @@ function setupUI() {
         changeSpeed(rowId, -1);
       } else if (action === 'speed-inc') {
         changeSpeed(rowId, 1);
+      } else if (action === 'toggleDex') {
+        toggleDex(rowId);
       } else if (action === 'row-eye') {
         toggleHidden(rowId);
       } else if (action === 'row-remove') {
+        if (mode === 'investigator') {
+          const row = rows.find(r => r.id === rowId && r.mode === 'investigator');
+          if (row) {
+            openDeleteInvestigatorModal(rowId);
+            return;
+          }
+        }
         removeRow(rowId);
       } else if (action === 'effect-badge') {
         const effectKey = actionEl.dataset.effect;
@@ -149,14 +408,8 @@ function setupUI() {
         // Двойной клик по имени (по всей ячейке) — редактирование персонажа
         openEditInvestigatorModal(rowId);
         return;
-      }
 
-      const actionEl = e.target.closest('[data-action]');
-      if (!actionEl) return;
-      const action = actionEl.dataset.action;
-
-      if (action === 'row-restore-hp') {
-        restoreHpPrompt(rowId);
+        
       }
     });
 
@@ -180,27 +433,32 @@ function setupUI() {
   setupCombatUI();
   setupStateMenuUI();
   setupHelpUI();
+  setupWeaponSuggestPositioning();
+  setupCampaignDatePicker();
+  setupSceneMenu();
+  updateUndoRedoButtons();
+}
+
+function syncModeToUI() {
+  const tracker = document.querySelector('.tracker');
+  if (tracker) {
+    tracker.classList.toggle('investigator-mode', mode === 'investigator');
+    tracker.classList.toggle('arsenal-mode', mode === 'arsenal');
+    tracker.classList.toggle('grimoire-mode', mode === 'grimoire');
+  }
+  const modeInvestigators = document.getElementById('modeInvestigators');
+  const modeArsenal = document.getElementById('modeArsenal');
+  const modeGrimoireBtn = document.getElementById('modeGrimoire');
+  if (modeInvestigators) modeInvestigators.classList.toggle('active', mode === 'investigator');
+  if (modeArsenal) modeArsenal.classList.toggle('active', mode === 'arsenal');
+  if (modeGrimoireBtn) modeGrimoireBtn.classList.toggle('active', mode === 'grimoire');
 }
 
 function setMode(m) {
   mode = m;
-
-  const tracker = document.querySelector('.tracker');
-  tracker.classList.toggle('investigator-mode', m === 'investigator');
-  tracker.classList.toggle('arsenal-mode', m === 'arsenal');
-  tracker.classList.toggle('grimoire-mode', m === 'grimoire');
-
-  document.getElementById('modeInvestigators')
-    .classList.toggle('active', m === 'investigator');
-
-  document.getElementById('modeArsenal')
-    .classList.toggle('active', m === 'arsenal');
-
-  const modeGrimoireBtn = document.getElementById('modeGrimoire');
-  if (modeGrimoireBtn) {
-    modeGrimoireBtn.classList.toggle('active', m === 'grimoire');
-  }
-
+  if (m !== 'investigator') closeKeeperSideMenu();
+  closeSceneMenu();
+  syncModeToUI();
   save();
   render();
 }
@@ -334,6 +592,20 @@ function getSpeedMod(row) {
 function getCurrentSpeed(row) {
   return getBaseSpeed(row) + getSpeedMod(row);
 }
+
+/** Базовая ЛВК с листа (без временного буста в трекере). */
+function getBaseDex(row) {
+  if (row.mode !== 'investigator') return row.dex ?? 0;
+  return row.baseDex ?? row.dex ?? 0;
+}
+
+/** ЛВК для отображения/сортировки: с бустом dexBoosted = base + 50. */
+function getEffectiveDex(row) {
+  if (row.mode !== 'investigator') return row.dex ?? 0;
+  const base = getBaseDex(row);
+  return row.dexBoosted ? base + 50 : base;
+}
+
 function sortBy(key) {
   if (mode === 'arsenal' && !['name', 'damage'].includes(key)) return;
   if (mode === 'investigator' && key === 'damage') return;
@@ -341,8 +613,18 @@ function sortBy(key) {
   else { sortState.key = key; sortState.asc = true; }
   syncNotesFromDOM();
   rows.sort((a, b) => {
-    const va = key === 'speed' && a.mode === 'investigator' ? getCurrentSpeed(a) : a[key];
-    const vb = key === 'speed' && b.mode === 'investigator' ? getCurrentSpeed(b) : b[key];
+    const va =
+      key === 'speed' && a.mode === 'investigator'
+        ? getCurrentSpeed(a)
+        : key === 'dex' && a.mode === 'investigator'
+          ? getEffectiveDex(a)
+          : a[key];
+    const vb =
+      key === 'speed' && b.mode === 'investigator'
+        ? getCurrentSpeed(b)
+        : key === 'dex' && b.mode === 'investigator'
+          ? getEffectiveDex(b)
+          : b[key];
     if (va < vb) return sortState.asc ? -1 : 1;
     if (va > vb) return sortState.asc ? 1 : -1;
     return 0;
@@ -362,7 +644,9 @@ function getArsenalOptions(selectedId) {
 }
 
 function render() {
+  syncModeToUI();
   const tbody = document.getElementById('tableBody');
+  if (!tbody) return;
   tbody.innerHTML = '';
 
   rows.filter(r => r.mode === mode && !r.hidden).forEach(row => {
@@ -415,27 +699,28 @@ function render() {
     render();
   };
 
-  // Подсветка активной боевой строки после перерисовки
-  if (AppState.combat.active && AppState.combat.selectedId) {
+  // Подсветка активной боевой строки после перерисовки (только вкладка персонажей)
+  if (mode === 'investigator' && AppState.combat.active && AppState.combat.selectedId) {
     setCombatSelection(AppState.combat.selectedId, false);
   }
 
-  const screen = document.getElementById('keeperScreen');
-  screen.innerHTML = '';
+  const listEl = document.getElementById('keeperScreenList');
+  if (listEl) {
+    listEl.innerHTML = '';
 
-  const hiddenRows = rows
-    .filter(r => r.mode === mode && r.hidden)
-    .slice()
-    .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru', { sensitivity: 'base' }));
+    const hiddenRows = rows
+      .filter(r => r.mode === mode && r.hidden)
+      .slice()
+      .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ru', { sensitivity: 'base' }));
 
-  hiddenRows.forEach(row => {
+    hiddenRows.forEach(row => {
       const div = document.createElement('div');
       div.className = 'screen-row';
 
       // Ширма
       let summary = row.name;
       if (row.mode === 'investigator') {
-        summary = `${row.name} — ПЗ ${row.hp}, РАС ${row.san}, ЛВК ${row.dex}`;
+        summary = `${row.name} — ПЗ ${row.hp}, РАС ${row.san}, ЛВК ${getBaseDex(row)}`;
       } else if (row.mode === 'arsenal') {
         summary = `${row.name} — ${row.damage || '—'}`;
       } else if (row.mode === 'grimoire') {
@@ -447,9 +732,11 @@ function render() {
         <span>${summary}</span>
         <button class='remove-btn' data-action="screen-remove" data-id="${row.id}" title="Удалить строку">✖</button>
       `;
-      screen.appendChild(div);
+      listEl.appendChild(div);
     });
-  
+  }
+
+  refreshPywebviewFindAfterRender();
 }
 
 function renderRowInner(row) {
@@ -524,8 +811,8 @@ function renderInvestigatorRow(row) {
     </td>
 
     <td class="${row.dexBoosted ? 'highlight' : ''}"
-        data-action="toggle-dex">
-      ${row.dex}
+        data-action="toggleDex">
+      ${getEffectiveDex(row)}
     </td>
 
     <td class="speed-cell ${getSpeedMod(row) === -1 ? 'speed-low' : getSpeedMod(row) === 1 ? 'speed-high' : ''}">
@@ -569,12 +856,11 @@ function renderInvestigatorRow(row) {
       </div>
     </td>
 
-    <td>
-      <button class="eye-btn" data-action="row-eye">👁</button>
-    </td>
-
-    <td>
-      <button class="remove-btn" data-action="row-remove">✖</button>
+    <td class="col-actions inv-action-cell investigator-only">
+      <span class="inv-action-btns">
+        <button type="button" class="eye-btn" data-action="row-eye" title="Скрыть в ширму">👁</button>
+        <button type="button" class="remove-btn" data-action="row-remove" title="Удалить">✖</button>
+      </span>
     </td>
   `;
 }
@@ -590,7 +876,7 @@ function showInvestigatorTooltip(e, id) {
         <div><b>СИЛ</b>: ${r.str}</div>
         <div><b>ВЫН</b>: ${r.con}</div>
         <div><b>ТЕЛ</b>: ${r.siz}</div>
-        <div><b>ЛВК</b>: ${r.dex}</div>
+        <div><b>ЛВК</b>: ${getBaseDex(r)}</div>
         <div><b>МОЩ</b>: ${r.pow ?? 0}</div>
         <div><b>ПМ</b>: ${r.mp ?? Math.floor(((r.pow || 0) / 5))}</div>
         </div>
@@ -651,8 +937,8 @@ function renderArsenalRow(row) {
       </div>
     </td>
 
-    <td>
-      <button class="remove-btn" data-action="row-remove">✖</button>
+    <td class="col-actions arsenal-only">
+      <button type="button" class="remove-btn" data-action="row-remove" title="Удалить">✖</button>
     </td>
   `;
 }
@@ -695,8 +981,8 @@ function renderGrimoireRow(row) {
       </div>
     </td>
 
-    <td>
-      <button class="remove-btn" data-action="row-remove">✖</button>
+    <td class="col-actions grimoire-only">
+      <button type="button" class="remove-btn" data-action="row-remove" title="Удалить">✖</button>
     </td>
   `;
 }
@@ -747,10 +1033,10 @@ function restoreHpPrompt(id) {
 
 function toggleDex(id) {
   const r = rows.find(r => r.id === id);
+  if (!r || r.mode !== 'investigator') return;
   r.dexBoosted = !r.dexBoosted;
-  r.dex = r.dexBoosted ? r.baseDex + 50 : r.baseDex;
   syncNotesFromDOM();
-  rows.sort((a, b) => b.dex - a.dex);
+  rows.sort((a, b) => getEffectiveDex(b) - getEffectiveDex(a));
   commit({ scope: 'rows' });
 }
 
@@ -792,17 +1078,6 @@ function toggleHidden(id) {
   r.hidden = !r.hidden;
   commit({ scope: 'all' });
 }
-
-document.getElementById("newDayBtn").onclick = () => {
-  pushUndo('Новый день');
-  rows.forEach(r => {
-    r.baseSan = r.san;
-    r.sanAlert = false;
-  });
-  render();
-  save();
-
-};
 
 function syncNotesFromDOM() {
   document.querySelectorAll('.note-content').forEach(el => {
@@ -851,8 +1126,7 @@ document.getElementById('importFile').onchange = e => {
   const baseName = file.name.replace(/\.json$/i, '') || 'Untitled';
   saveName = baseName;
   localStorage.setItem('dmTrackerName', saveName);
-  const display = document.getElementById('saveNameDisplay');
-  if (display) display.textContent = saveName;
+  updateSaveNameLabels();
 
   const reader = new FileReader();
   reader.onload = () => {
@@ -875,6 +1149,8 @@ function save() {
         round: AppState.combat.round,
         selectedId: AppState.combat.selectedId,
       },
+      campaignDate: campaignDateISO,
+      calendarEvents,
     },
   };
   const json = JSON.stringify(payload);
@@ -890,12 +1166,20 @@ function save() {
   }
 }
 
+function updateSaveNameLabels() {
+  const text = saveName || 'Untitled';
+  const display = document.getElementById('saveNameDisplay');
+  const preview = document.getElementById('sceneMenuSavePreview');
+  if (display) display.textContent = text;
+  if (preview) preview.textContent = text;
+}
+
 function initSaveNameUI() {
   const display = document.getElementById('saveNameDisplay');
   const input = document.getElementById('saveNameInput');
   if (!display || !input) return;
 
-  display.textContent = saveName || 'Untitled';
+  updateSaveNameLabels();
 
   const startEdit = () => {
     input.value = saveName || 'Untitled';
@@ -910,7 +1194,7 @@ function initSaveNameUI() {
       const value = input.value.trim() || 'Untitled';
       saveName = value;
       localStorage.setItem('dmTrackerName', saveName);
-      display.textContent = saveName;
+      updateSaveNameLabels();
     }
     input.style.display = 'none';
     display.style.display = 'inline-block';
@@ -931,6 +1215,12 @@ function initSaveNameUI() {
   });
 }
 
+function getGameDateDDMMYYYYForExport() {
+  const iso =
+    campaignDateISO && /^\d{4}-\d{2}-\d{2}$/.test(campaignDateISO) ? campaignDateISO : todayISO();
+  return formatDDMMYYYY(iso);
+}
+
 function getExportFileName() {
   const base = (saveName || 'Untitled').trim() || 'Untitled';
   // Разрешаем буквы/цифры, пробелы, дефис и подчёркивание (включая кириллицу)
@@ -938,43 +1228,296 @@ function getExportFileName() {
     .replace(/[^0-9A-Za-z\u0400-\u04FF _-]/g, '')
     .replace(/\s+/g, '_');
   const name = sanitized || 'Untitled';
-  return name + '.json';
+  const datePart = getGameDateDDMMYYYYForExport();
+  return `${name}_${datePart}.json`;
+}
+
+function getKeeperExportFileName() {
+  const base = (saveName || 'Untitled').trim() || 'Untitled';
+  const sanitized = base
+    .replace(/[^0-9A-Za-z\u0400-\u04FF _-]/g, '')
+    .replace(/\s+/g, '_');
+  const name = sanitized || 'Untitled';
+  return `ширма_${name}.json`;
+}
+
+function exportKeeperScreenData() {
+  const keeperRows = rows.filter(r => r.mode === 'investigator' && r.hidden);
+  if (!keeperRows.length) {
+    alert('В ширме нет скрытых персонажей');
+    return;
+  }
+
+  const payload = {
+    version: STORAGE_VERSION,
+    kind: 'keeper-investigators',
+    exportedAt: Date.now(),
+    rows: keeperRows.map(r => JSON.parse(JSON.stringify(r))),
+  };
+  const json = JSON.stringify(payload);
+
+  if (window.pywebview) {
+    window.pywebview.api.save_json(json, getKeeperExportFileName());
+  } else {
+    const blob = new Blob([json], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = getKeeperExportFileName();
+    a.click();
+  }
+}
+
+function extractKeeperImportRows(parsed) {
+  if (!parsed || typeof parsed !== 'object') return [];
+  let arr;
+  if (Array.isArray(parsed)) {
+    arr = parsed;
+  } else if (Array.isArray(parsed.rows)) {
+    arr = parsed.rows;
+  } else {
+    return [];
+  }
+  return arr.filter(
+    (item) =>
+      item &&
+      typeof item === 'object' &&
+      (item.mode === 'investigator' || item.mode == null)
+  );
+}
+
+function normalizeImportedKeeperInvestigator(raw) {
+  const r = JSON.parse(JSON.stringify(raw));
+  r.id = crypto.randomUUID();
+  r.mode = 'investigator';
+  r.hidden = true;
+  r.name = (r.name != null && String(r.name).trim()) ? String(r.name).trim() : 'Без имени';
+
+  r.armor ??= 0;
+  r.str ??= 0;
+  r.con ??= 0;
+  r.siz ??= 0;
+  r.pow ??= 0;
+  r.san ??= 0;
+  r.baseSan ??= r.san;
+  r.baseDex ??= r.dex;
+  r.dex = r.baseDex;
+  r.db ??= calcDB(r.str, r.siz);
+  if (r.baseSpeed === undefined) r.baseSpeed = r.speed != null ? r.speed : calcSpeed(r.dex, r.str, r.siz);
+  r.speedMod ??= 0;
+  if (r.hp === undefined && r.baseHp === undefined) {
+    const h = calcHp(r.siz, r.con);
+    r.hp = h;
+    r.baseHp = h;
+  }
+  r.mp ??= Math.floor(((r.pow || 0) / 5));
+  r.brawl ??= 25;
+  r.handgun ??= 20;
+  r.rifle ??= 25;
+  r.weapons ??= [];
+  r.effects ??= [];
+  if (r.dodge === undefined) {
+    const base = Math.floor((r.dex || 0) / 2);
+    r.dodge = base;
+    r.baseDodge = base;
+  }
+  r.dexBoosted ??= false;
+  r.sanAlert ??= false;
+  r.note ??= '';
+
+  r.weapons = (r.weapons || []).filter((wid) =>
+    rows.some((x) => x.id === wid && x.mode === 'arsenal')
+  );
+
+  return r;
+}
+
+function importKeeperScreenFromText(text) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    alert('Файл не является корректным JSON');
+    return;
+  }
+
+  const incoming = extractKeeperImportRows(parsed);
+  if (!incoming.length) {
+    alert('В файле нет записей персонажей для ширмы.');
+    return;
+  }
+
+  pushUndo('Импорт ширмы');
+  for (const raw of incoming) {
+    rows.push(normalizeImportedKeeperInvestigator(raw));
+  }
+  commit({ scope: 'all' });
+  showToast(`Добавлено в ширму: ${incoming.length}`);
+}
+
+function onKeeperImportFileChange(e) {
+  const input = e.target;
+  const file = input.files && input.files[0];
+  input.value = '';
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    importKeeperScreenFromText(reader.result);
+  };
+  reader.readAsText(file);
+}
+
+function closeKeeperSideMenu() {
+  const menu = document.getElementById('keeperSideMenu');
+  const toggle = document.getElementById('keeperMenuToggle');
+  if (!menu || !toggle) return;
+  menu.classList.remove('keeper-side-menu--open');
+  toggle.setAttribute('aria-expanded', 'false');
+  menu.setAttribute('aria-hidden', 'true');
+}
+
+function openKeeperSideMenu() {
+  const menu = document.getElementById('keeperSideMenu');
+  const toggle = document.getElementById('keeperMenuToggle');
+  if (!menu || !toggle) return;
+  menu.classList.add('keeper-side-menu--open');
+  toggle.setAttribute('aria-expanded', 'true');
+  menu.setAttribute('aria-hidden', 'false');
+}
+
+function setupKeeperSideMenu() {
+  const toggle = document.getElementById('keeperMenuToggle');
+  const menu = document.getElementById('keeperSideMenu');
+  const closeBtn = document.getElementById('keeperMenuClose');
+  if (!toggle || !menu || !closeBtn) return;
+
+  toggle.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (!menu.classList.contains('keeper-side-menu--open')) openKeeperSideMenu();
+  });
+
+  closeBtn.addEventListener('click', () => closeKeeperSideMenu());
+}
+
+function closeSceneMenu() {
+  const panel = document.getElementById('scenePanel');
+  const toggle = document.getElementById('sceneMenuToggle');
+  if (!panel || !toggle) return;
+  panel.hidden = true;
+  toggle.setAttribute('aria-expanded', 'false');
+}
+
+function openSceneMenu() {
+  const panel = document.getElementById('scenePanel');
+  const toggle = document.getElementById('sceneMenuToggle');
+  if (!panel || !toggle) return;
+  panel.hidden = false;
+  toggle.setAttribute('aria-expanded', 'true');
+  if (campaignDatePicker && typeof campaignDatePicker.redraw === 'function') {
+    requestAnimationFrame(() => campaignDatePicker.redraw());
+  }
+}
+
+function setupSceneMenu() {
+  const toggle = document.getElementById('sceneMenuToggle');
+  const panel = document.getElementById('scenePanel');
+  const wrap = document.querySelector('.scene-menu-wrap');
+  if (!toggle || !panel || !wrap) return;
+
+  const isOpen = () => !panel.hidden;
+
+  toggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (isOpen()) closeSceneMenu();
+    else openSceneMenu();
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!isOpen()) return;
+    if (wrap.contains(e.target)) return;
+    if (e.target.closest && e.target.closest('.flatpickr-calendar')) return;
+    closeSceneMenu();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!isOpen()) return;
+    closeSceneMenu();
+  });
+}
+
+function clearKeeperScreen() {
+  const hiddenInv = rows.filter((r) => r.mode === 'investigator' && r.hidden);
+  if (!hiddenInv.length) {
+    alert('В ширме нет персонажей');
+    return;
+  }
+  if (!confirm(`Удалить всех персонажей из ширмы (${hiddenInv.length})?`)) return;
+
+  pushUndo('Очистка ширмы');
+  const removeIds = new Set(hiddenInv.map((r) => r.id));
+  rows = rows.filter((r) => !removeIds.has(r.id));
+
+  if (AppState.combat.selectedId && !rows.some((r) => r.id === AppState.combat.selectedId)) {
+    AppState.combat.selectedId = null;
+  }
+
+  commit({ scope: 'all' });
 }
 
 function load() {
   const d = localStorage.getItem(STORAGE_KEY);
-  if (d) {
-    let parsed;
-    try {
-      parsed = JSON.parse(d);
-    } catch {
-      parsed = null;
-    }
-    if (!parsed) return;
+  if (!d) {
+    campaignDateISO = todayISO();
+    calendarEvents = [];
+    syncModeToUI();
+    return;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(d);
+  } catch {
+    parsed = null;
+  }
+  if (!parsed) {
+    campaignDateISO = todayISO();
+    calendarEvents = [];
+    syncModeToUI();
+    return;
+  }
 
-    // v0 (старый формат): {rows, mode, combat}
-    // v1+: {version, savedAt, data:{rows, mode, combat}}
-    const data = parsed && typeof parsed === 'object' && 'version' in parsed && parsed.data
-      ? parsed.data
-      : parsed;
+  // v0 (старый формат): {rows, mode, combat}
+  // v1+: {version, savedAt, data:{rows, mode, combat}}
+  const data = parsed && typeof parsed === 'object' && 'version' in parsed && parsed.data
+    ? parsed.data
+    : parsed;
 
-    rows = data.rows || [];
-    mode = data.mode || 'investigator';
+  rows = data.rows || [];
+  mode = data.mode || 'investigator';
 
-    // Восстанавливаем состояние боя, если есть
-    const combat = data.combat || {};
-    AppState.combat.active = !!combat.active;
-    AppState.combat.round = combat.round || 0;
-    AppState.combat.selectedId = combat.selectedId || null;
+  if (data.campaignDate && /^\d{4}-\d{2}-\d{2}$/.test(data.campaignDate)) {
+    campaignDateISO = data.campaignDate;
+  } else {
+    campaignDateISO = todayISO();
+  }
+  calendarEvents = normalizeCalendarEvents(data.calendarEvents);
 
-     /* Что пишем в строку */
-    rows.forEach(r => {
+  // Восстанавливаем состояние боя, если есть
+  const combat = data.combat || {};
+  AppState.combat.active = !!combat.active;
+  AppState.combat.round = combat.round || 0;
+  AppState.combat.selectedId = combat.selectedId || null;
+
+  /* Что пишем в строку */
+  rows.forEach((r) => {
       
       if (r.mode === 'investigator') {
         r.str ??= 0;
         r.con ??= 0;
         r.siz ??= 0;
         r.pow ??= 0;
+        r.baseDex ??= r.dex;
+        r.dex = r.baseDex;
         r.db ??= calcDB(r.str, r.siz);
         if (r.baseSpeed === undefined) r.baseSpeed = r.speed != null ? r.speed : calcSpeed(r.dex, r.str, r.siz);
         r.speedMod ??= 0;
@@ -1012,7 +1555,9 @@ function load() {
       r.note ??= '';
       r.hidden ??= false;
     });
-  }
+
+  syncModeToUI();
+  syncCampaignDateToPicker();
 }
 
 function commit(options) {
@@ -1060,21 +1605,40 @@ const TOAST_DURATION = 3000;
 function pushUndo(description) {
   const desc = description || 'Изменение';
   redoStack.length = 0;
-  undoStack.push({ state: JSON.stringify({ rows, mode }), description: desc });
+  undoStack.push({
+    state: JSON.stringify({ rows, mode, campaignDateISO, calendarEvents }),
+    description: desc,
+  });
   if (undoStack.length > UNDO_LIMIT) undoStack.shift();
   updateUndoRedoButtons();
 }
 
+function canUndo() {
+  return undoStack.length > 0;
+}
+
+function canRedo() {
+  return redoStack.length > 0;
+}
+
 function undo() {
-  if (undoStack.length === 0) {
-    alert('Нечего отменять');
-    return;
-  }
+  if (undoStack.length === 0) return;
   const item = undoStack.pop();
   const prev = JSON.parse(item.state);
-  redoStack.push({ state: JSON.stringify({ rows, mode }), description: item.description });
+  redoStack.push({
+    state: JSON.stringify({ rows, mode, campaignDateISO, calendarEvents }),
+    description: item.description,
+  });
   rows = prev.rows;
   mode = prev.mode;
+  if (prev.campaignDateISO != null && /^\d{4}-\d{2}-\d{2}$/.test(prev.campaignDateISO)) {
+    campaignDateISO = prev.campaignDateISO;
+  }
+  if (Array.isArray(prev.calendarEvents)) {
+    calendarEvents = normalizeCalendarEvents(prev.calendarEvents);
+  }
+  syncModeToUI();
+  syncCampaignDateToPicker();
   save();
   render();
   updateUndoRedoButtons();
@@ -1085,9 +1649,20 @@ function redo() {
   if (redoStack.length === 0) return;
   const item = redoStack.pop();
   const next = JSON.parse(item.state);
-  undoStack.push({ state: JSON.stringify({ rows, mode }), description: item.description });
+  undoStack.push({
+    state: JSON.stringify({ rows, mode, campaignDateISO, calendarEvents }),
+    description: item.description,
+  });
   rows = next.rows;
   mode = next.mode;
+  if (next.campaignDateISO != null && /^\d{4}-\d{2}-\d{2}$/.test(next.campaignDateISO)) {
+    campaignDateISO = next.campaignDateISO;
+  }
+  if (Array.isArray(next.calendarEvents)) {
+    calendarEvents = normalizeCalendarEvents(next.calendarEvents);
+  }
+  syncModeToUI();
+  syncCampaignDateToPicker();
   save();
   render();
   updateUndoRedoButtons();
@@ -1097,8 +1672,14 @@ function redo() {
 function updateUndoRedoButtons() {
   const undoBtn = document.getElementById('undoBtn');
   const redoBtn = document.getElementById('redoBtn');
-  if (undoBtn) undoBtn.disabled = undoStack.length === 0;
-  if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+  if (undoBtn) {
+    undoBtn.disabled = undoStack.length === 0;
+    undoBtn.title = undoStack.length === 0 ? 'Нет шагов для отката' : 'Откатить шаг';
+  }
+  if (redoBtn) {
+    redoBtn.disabled = redoStack.length === 0;
+    redoBtn.title = redoStack.length === 0 ? 'Нет шагов для повтора' : 'Повторить шаг';
+  }
 }
 
 function showToast(message) {
@@ -1120,9 +1701,11 @@ document.addEventListener('keydown', (e) => {
   // Не ломаем модалки создания/редактирования — там отдельный обработчик
   const createModal = document.getElementById('investigatorModal');
   const editModal = document.getElementById('editInvestigatorModal');
+  const deleteInvestigatorModal = document.getElementById('deleteInvestigatorModal');
   const modalOpen =
     (createModal && !createModal.classList.contains('hidden')) ||
-    (editModal && !editModal.classList.contains('hidden'));
+    (editModal && !editModal.classList.contains('hidden')) ||
+    (deleteInvestigatorModal && !deleteInvestigatorModal.classList.contains('hidden'));
   if (modalOpen) return;
 
   // Игнорируем, когда фокус в полях ввода/заметках
@@ -1157,36 +1740,39 @@ document.addEventListener('keydown', (e) => {
   // Undo / Redo
   if (ctrl && !shift && e.key.toLowerCase() === 'z') {
     e.preventDefault();
-    undo();
+    if (canUndo()) undo();
     return;
   }
   if ((ctrl && shift && e.key.toLowerCase() === 'z') || (ctrl && e.key.toLowerCase() === 'y')) {
     e.preventDefault();
-    redo();
+    if (canRedo()) redo();
     return;
   }
 
-  // Бой: Alt+ArrowUp / Alt+ArrowDown — перемещение выделения
-  if (e.altKey && !ctrl && !shift && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-    e.preventDefault();
-    moveCombatSelection(e.key === 'ArrowUp' ? 'up' : 'down');
-    return;
-  }
+  // Бой (только вкладка «Персонажи»)
+  if (mode === 'investigator') {
+    // Alt+ArrowUp / Alt+ArrowDown — перемещение выделения
+    if (e.altKey && !ctrl && !shift && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      moveCombatSelection(e.key === 'ArrowUp' ? 'up' : 'down');
+      return;
+    }
 
-  // Бой: Alt+B — старт/панель боя (как клик по кнопке)
-  if (e.altKey && !ctrl && !shift && (e.key === 'b' || e.key === 'B' || e.key === 'и' || e.key === 'И')) {
-    e.preventDefault();
-    const toggle = document.getElementById('combatToggle');
-    if (toggle) toggle.click();
-    return;
-  }
+    // Alt+B — старт/панель боя (как клик по кнопке)
+    if (e.altKey && !ctrl && !shift && (e.key === 'b' || e.key === 'B' || e.key === 'и' || e.key === 'И')) {
+      e.preventDefault();
+      const toggle = document.getElementById('combatToggle');
+      if (toggle) toggle.click();
+      return;
+    }
 
-    // Бой: Alt+E — завершение боя
-  if (e.altKey && !ctrl && !shift && (e.key === 'e' || e.key === 'E' || e.key === 'у' || e.key === 'У')) {
-    e.preventDefault();
-    const toggle = document.getElementById('combatEnd');
-    if (toggle) toggle.click();
-    return;
+    // Alt+E — завершение боя
+    if (e.altKey && !ctrl && !shift && (e.key === 'e' || e.key === 'E' || e.key === 'у' || e.key === 'У')) {
+      e.preventDefault();
+      const endBtn = document.getElementById('combatEnd');
+      if (endBtn) endBtn.click();
+      return;
+    }
   }
 });
 
@@ -1352,12 +1938,13 @@ function renderWeaponTags(row) {
     const w = rows.find(r => r.id === id);
     if (!w) return '';
 
+    const spellCls = w.mode === 'grimoire' ? 'spell-tag' : '';
     return `
-      <span class="weapon-tag ${w.mode === 'grimoire' ? 'spell-tag' : ''}"
+      <span class="weapon-tag ${spellCls}"
             onmouseenter="showWeaponTagTooltip(event,'${row.id}','${id}')"
             onmouseleave="hideTooltip()">
-        ${w.name}
-        <button data-action="weapon-remove" data-weapon-id="${id}">✖</button>
+        <span class="weapon-tag-label">${w.name}</span>
+        <button type="button" data-action="weapon-remove" data-weapon-id="${id}">✖</button>
       </span>
     `;
   }).join('');
@@ -1365,13 +1952,78 @@ function renderWeaponTags(row) {
 
 
 
+function clearWeaponSuggestPosition(box) {
+  if (!box) return;
+  box.style.left = '';
+  box.style.top = '';
+  box.style.bottom = '';
+  box.style.width = '';
+  box.style.maxHeight = '';
+}
+
+function positionWeaponSuggestBox(box, input) {
+  if (!box?.childElementCount || !input) return;
+  const rect = input.getBoundingClientRect();
+  const margin = 6;
+  const maxList = 280;
+  const below = window.innerHeight - rect.bottom - margin;
+  const above = rect.top - margin;
+
+  let maxH;
+  if (below >= 120 || below >= above) {
+    maxH = Math.min(maxList, below);
+    box.style.top = `${rect.bottom}px`;
+    box.style.bottom = 'auto';
+  } else {
+    maxH = Math.min(maxList, above);
+    box.style.bottom = `${window.innerHeight - rect.top + margin}px`;
+    box.style.top = 'auto';
+  }
+  box.style.maxHeight = `${Math.max(72, maxH)}px`;
+
+  let left = rect.left;
+  const w = rect.width;
+  const vw = window.innerWidth;
+  if (left + w > vw - margin) {
+    left = Math.max(margin, vw - w - margin);
+  }
+  if (left < margin) left = margin;
+  box.style.left = `${left}px`;
+  box.style.width = `${w}px`;
+}
+
+function repositionAllWeaponSuggestPopups() {
+  document.querySelectorAll('.weapon-suggestions').forEach((box) => {
+    if (!box.childElementCount) return;
+    const cell = box.closest('.weapons-cell');
+    const inp = cell?.querySelector('.weapon-input');
+    if (inp) positionWeaponSuggestBox(box, inp);
+  });
+}
+
+function setupWeaponSuggestPositioning() {
+  const handler = () => repositionAllWeaponSuggestPopups();
+  window.addEventListener('resize', handler);
+  window.addEventListener('scroll', handler, true);
+  const tw = document.querySelector('.table-wrap');
+  if (tw) tw.addEventListener('scroll', handler);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', handler);
+    window.visualViewport.addEventListener('scroll', handler);
+  }
+}
+
 function showWeaponSuggestions(invId, input) {
   const inv = rows.find(r => r.id === invId);
   const box = document.getElementById(`weapon-suggest-${invId}`);
+  if (!box) return;
   box.innerHTML = '';
+  clearWeaponSuggestPosition(box);
 
-const query = (input?.value || '').trim().toLowerCase();
+  const query = (input?.value || '').trim().toLowerCase();
   if (!input || !inv) return;
+  const anchorInput =
+    box.closest('.weapons-cell')?.querySelector('.weapon-input') || input;
   let list = getArsenal();
 
   if (query) {
@@ -1400,15 +2052,19 @@ const query = (input?.value || '').trim().toLowerCase();
 
     div.onclick = () => {
       addWeaponToInvestigator(invId, w.id);
-      input.value = '';
-      showWeaponSuggestions(invId, input); // 🔥 перерисовать с подсветкой
-      //box.innerHTML = '';
-      input.focus();
-      
+      const boxAfter = document.getElementById(`weapon-suggest-${invId}`);
+      const live = boxAfter?.closest('.weapons-cell')?.querySelector('.weapon-input');
+      if (live) live.value = '';
+      showWeaponSuggestions(invId, live || input);
+      (live || input)?.focus();
     };
 
     box.appendChild(div);
   });
+
+  if (box.childElementCount) {
+    requestAnimationFrame(() => positionWeaponSuggestBox(box, anchorInput));
+  }
 }
 
 function weaponInputKeydown(e, invId, input) {
@@ -1435,8 +2091,10 @@ document.addEventListener('mousedown', e => {
 
       const list = block.querySelector('.weapon-suggestions');
 
-      if (list) list.innerHTML = '';
-      
+      if (list) {
+        list.innerHTML = '';
+        clearWeaponSuggestPosition(list);
+      }
 
     }
 
@@ -1574,7 +2232,7 @@ function showSanTooltip(e, id) {
   const r = rows.find(x => x.id === id);
   if (!r || r.mode !== 'investigator') return;
   const base = r.baseSan ?? r.san ?? 0;
-  showInvTooltip(e, `Базовая РАС: ${base}`, false);
+  showInvTooltip(e, `Базовый РАС: ${base}`, false);
 }
 
 function showTooltip(e, text) {
@@ -1685,6 +2343,18 @@ document.addEventListener('click', (e) => {
 // Глобальные хоткеи для модалок создания/редактирования персонажа:
 // Enter — сохранить, Esc — закрыть.
 document.addEventListener('keydown', (e) => {
+  const deleteModal = document.getElementById('deleteInvestigatorModal');
+  if (deleteModal && !deleteModal.classList.contains('hidden')) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      confirmDeleteInvestigator();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeDeleteInvestigatorModal();
+    }
+    return;
+  }
+
   const createModal = document.getElementById('investigatorModal');
   const editModal = document.getElementById('editInvestigatorModal');
   const createOpen = createModal && !createModal.classList.contains('hidden');
@@ -1715,10 +2385,21 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+function focusInvestigatorModalNameField(inputId) {
+  requestAnimationFrame(() => {
+    const el = document.getElementById(inputId);
+    if (el) {
+      el.focus();
+      el.select();
+    }
+  });
+}
+
 function openInvestigatorModal() {
   clearInvestigatorModal();
   const modal = document.getElementById('investigatorModal');
   modal.classList.remove('hidden');
+  focusInvestigatorModalNameField('modal-name');
 }
 
 function clearInvestigatorModal() {
@@ -1736,12 +2417,41 @@ function closeInvestigatorModal() {
 // --- Edit investigator modal (double-click on td.name in investigator row)
 let editingInvestigatorId = null;
 
+let pendingDeleteInvestigatorId = null;
+
+function openDeleteInvestigatorModal(rowId) {
+  const row = rows.find(r => r.id === rowId && r.mode === 'investigator');
+  if (!row) return;
+  pendingDeleteInvestigatorId = rowId;
+  const msg = document.getElementById('deleteInvestigatorMessage');
+  if (msg) {
+    msg.textContent = `Удалить персонажа (${row.name})?`;
+  }
+  document.getElementById('deleteInvestigatorModal').classList.remove('hidden');
+  requestAnimationFrame(() => {
+    const yesBtn = document.getElementById('deleteInvestigatorConfirmBtn');
+    if (yesBtn) yesBtn.focus();
+  });
+}
+
+function closeDeleteInvestigatorModal() {
+  pendingDeleteInvestigatorId = null;
+  document.getElementById('deleteInvestigatorModal').classList.add('hidden');
+}
+
+function confirmDeleteInvestigator() {
+  const id = pendingDeleteInvestigatorId;
+  closeDeleteInvestigatorModal();
+  if (id) removeRow(id);
+}
+
 function openEditInvestigatorModal(rowId) {
   const row = rows.find(r => r.id === rowId && r.mode === 'investigator');
   if (!row) return;
   editingInvestigatorId = rowId;
   fillEditInvestigatorForm(row);
   document.getElementById('editInvestigatorModal').classList.remove('hidden');
+  focusInvestigatorModalNameField('edit-modal-name');
 }
 
 function cloneInvestigatorFromEdit() {
@@ -1764,7 +2474,7 @@ function fillEditInvestigatorForm(row) {
   set('edit-modal-str', row.str ?? 0);
   set('edit-modal-con', row.con ?? 0);
   set('edit-modal-siz', row.siz ?? 0);
-  set('edit-modal-dex', row.dex ?? 0);
+  set('edit-modal-dex', getBaseDex(row));
   set('edit-modal-speed', getBaseSpeed(row));
   set('edit-modal-pow', row.pow ?? 0);
   set('edit-modal-mp', row.mp ?? Math.floor(((row.pow || 0) / 5)));
@@ -1772,7 +2482,7 @@ function fillEditInvestigatorForm(row) {
   set('edit-modal-brawl', row.brawl ?? 25);
   set('edit-modal-handgun', row.handgun ?? 20);
   set('edit-modal-rifle', row.rifle ?? 25);
-  set('edit-modal-dodge', row.dodge ?? row.baseDodge ?? Math.floor((row.dex || 0) / 2));
+  set('edit-modal-dodge', row.dodge ?? row.baseDodge ?? Math.floor(getBaseDex(row) / 2));
   set('edit-modal-note', row.note ?? '');
 }
 
@@ -1788,7 +2498,7 @@ function openInvestigatorCloneModal(sourceRow) {
   set('modal-str', sourceRow.str ?? 0);
   set('modal-con', sourceRow.con ?? 0);
   set('modal-siz', sourceRow.siz ?? 0);
-  set('modal-dex', sourceRow.dex ?? 0);
+  set('modal-dex', getBaseDex(sourceRow));
   set('modal-pow', sourceRow.pow ?? 0);
   set('modal-mp', sourceRow.mp ?? Math.floor(((sourceRow.pow || 0) / 5)));
   set('modal-san', sourceRow.san ?? 0);
@@ -1799,7 +2509,7 @@ function openInvestigatorCloneModal(sourceRow) {
   const dodgeValue =
     sourceRow.dodge ??
     sourceRow.baseDodge ??
-    Math.floor((sourceRow.dex || 0) / 2);
+    Math.floor(getBaseDex(sourceRow) / 2);
   set('modal-dodge', dodgeValue);
 
   set('modal-note', sourceRow.note ?? '');
@@ -1809,12 +2519,7 @@ function openInvestigatorCloneModal(sourceRow) {
 
   const modal = document.getElementById('investigatorModal');
   modal.classList.remove('hidden');
-
-  const nameInput = document.getElementById('modal-name');
-  if (nameInput) {
-    nameInput.focus();
-    nameInput.select();
-  }
+  focusInvestigatorModalNameField('modal-name');
 }
 
 function confirmEditInvestigator() {
@@ -1893,6 +2598,7 @@ function setupHelpUI() {
         <dt>Alt+E (только Персонажи)</dt><dd>Завершить текущий бой</dd>
         <dt>Enter в форме добавления</dt><dd>Быстро создать запись, не нажимая кнопку</dd>
         <dt>Enter / Esc в модалках персонажа</dt><dd>Сохранить или закрыть окно создания/редактирования</dd>
+        <dt>Enter / Esc в подтверждении удаления персонажа</dt><dd>Удалить или отменить</dd>
         <dt>ПКМ по имени персонажа</dt><dd>Открыть радиальное меню состояний</dd>
         <dt>F1</dt><dd>Открыть/закрыть это окно справки</dd>
       </dl>
@@ -1930,6 +2636,10 @@ function setupHelpUI() {
         tab.classList.add('active');
       });
     });
+  }
+
+  if (window.pywebview) {
+    appendPywebviewFindHelpHotkey();
   }
 }
 
@@ -2040,6 +2750,8 @@ function setCombatSelection(id, withScroll) {
 }
 
 function startCombat() {
+  if (mode !== 'investigator') return;
+
   const rowsDom = getVisibleCombatRows();
   if (!rowsDom.length) {
     alert('Нет строк для боя');
@@ -2056,7 +2768,7 @@ function startCombat() {
 }
 
 function moveCombatSelection(direction) {
-  if (!AppState.combat.active) return;
+  if (mode !== 'investigator' || !AppState.combat.active) return;
 
   const rowsDom = getVisibleCombatRows();
   if (!rowsDom.length) return;
@@ -2418,6 +3130,13 @@ async function loadAutosave() {
     AppState.combat.round = combat.round || 0;
     AppState.combat.selectedId = combat.selectedId || null;
 
+    if (snapshot.campaignDate && /^\d{4}-\d{2}-\d{2}$/.test(snapshot.campaignDate)) {
+      campaignDateISO = snapshot.campaignDate;
+    } else {
+      campaignDateISO = todayISO();
+    }
+    calendarEvents = normalizeCalendarEvents(snapshot.calendarEvents);
+
     // Приводим строки к актуальному формату, как в load()
     rows.forEach(r => {
       if (r.mode === 'investigator') {
@@ -2425,6 +3144,8 @@ async function loadAutosave() {
         r.con ??= 0;
         r.siz ??= 0;
         r.pow ??= 0;
+        r.baseDex ??= r.dex;
+        r.dex = r.baseDex;
         r.db ??= calcDB(r.str, r.siz);
         if (r.baseSpeed === undefined) r.baseSpeed = r.speed != null ? r.speed : calcSpeed(r.dex, r.str, r.siz);
         r.speedMod ??= 0;
@@ -2461,6 +3182,8 @@ async function loadAutosave() {
       r.hidden ??= false;
     });
 
+    syncModeToUI();
+    syncCampaignDateToPicker();
     // После применения состояния сразу сохраняем и перерисовываем
     save();
     render();
@@ -2469,6 +3192,341 @@ async function loadAutosave() {
     console.error('Failed to apply autosave state', err);
   }
 }
+
+// --- Поиск по странице (Ctrl+F) только в окне pywebview; в браузере шорткат не перехватывается ---
+let pywebviewFindInitialized = false;
+
+const pywebviewFindState = {
+  open: false,
+  query: '',
+  ranges: [],
+  markElements: null,
+  currentIndex: -1,
+};
+
+function pywebviewFindUseCssHighlight() {
+  return typeof CSS !== 'undefined' && CSS.highlights && typeof Highlight !== 'undefined';
+}
+
+function getPywebviewFindRoots() {
+  const roots = [];
+  const tbody = document.getElementById('tableBody');
+  if (tbody) roots.push(tbody);
+  if (mode === 'investigator') {
+    const keeperList = document.getElementById('keeperScreenList');
+    if (keeperList) roots.push(keeperList);
+  }
+  return roots;
+}
+
+function isVisibleForPywebviewFind(el) {
+  let n = el;
+  while (n && n !== document.documentElement) {
+    const s = getComputedStyle(n);
+    if (s.display === 'none' || s.visibility === 'hidden') return false;
+    if (n.hasAttribute && n.hasAttribute('hidden')) return false;
+    n = n.parentElement;
+  }
+  return true;
+}
+
+function collectPywebviewFindRanges(queryLower) {
+  const ranges = [];
+  if (!queryLower.length) return ranges;
+  const roots = getPywebviewFindRoots();
+  for (const root of roots) {
+    const walker = document.createTreeWalker(
+      root,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode(node) {
+          if (!node.nodeValue || !node.nodeValue.length) return NodeFilter.FILTER_REJECT;
+          const p = node.parentElement;
+          if (!p) return NodeFilter.FILTER_REJECT;
+          if (p.closest('script, style')) return NodeFilter.FILTER_REJECT;
+          if (!isVisibleForPywebviewFind(p)) return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        },
+      }
+    );
+    let node;
+    while ((node = walker.nextNode())) {
+      const text = node.nodeValue;
+      const lower = text.toLowerCase();
+      let start = 0;
+      let idx;
+      while ((idx = lower.indexOf(queryLower, start)) !== -1) {
+        const r = document.createRange();
+        r.setStart(node, idx);
+        r.setEnd(node, idx + queryLower.length);
+        ranges.push(r);
+        start = idx + queryLower.length;
+      }
+    }
+  }
+  return ranges;
+}
+
+function clearPywebviewFindHighlights() {
+  if (typeof CSS !== 'undefined' && CSS.highlights) {
+    try {
+      CSS.highlights.delete('coc-pyw-find');
+      CSS.highlights.delete('coc-pyw-find-active');
+    } catch (_) {
+      /* ignore */
+    }
+  }
+  document.querySelectorAll('mark.coc-pyw-find-mark').forEach((m) => {
+    const parent = m.parentNode;
+    if (!parent) return;
+    while (m.firstChild) parent.insertBefore(m.firstChild, m);
+    parent.removeChild(m);
+  });
+  document.getElementById('tableBody')?.normalize();
+  document.getElementById('keeperScreenList')?.normalize();
+}
+
+function applyPywebviewFindMarks(ranges) {
+  const sorted = [...ranges].sort((a, b) => b.compareBoundaryPoints(Range.START_TO_START, a));
+  for (const r of sorted) {
+    try {
+      const mark = document.createElement('mark');
+      mark.className = 'coc-pyw-find-mark';
+      r.surroundContents(mark);
+    } catch (_) {
+      /* граница не в одном текстовом узле — пропускаем */
+    }
+  }
+}
+
+function pywebviewFindMatchTotal() {
+  if (pywebviewFindState.ranges.length) return pywebviewFindState.ranges.length;
+  return pywebviewFindState.markElements ? pywebviewFindState.markElements.length : 0;
+}
+
+/** Подсветка: остальные совпадения слабее, текущее (после Enter) — ярче; цикл по индексу задаётся снаружи. */
+function syncPywebviewFindHighlights() {
+  const idx = pywebviewFindState.currentIndex;
+  const marks = pywebviewFindState.markElements;
+  if (marks && marks.length) {
+    marks.forEach((m, i) => {
+      if (idx >= 0 && i === idx) {
+        m.classList.add('coc-pyw-find-mark-active');
+      } else {
+        m.classList.remove('coc-pyw-find-mark-active');
+      }
+    });
+    return;
+  }
+
+  const ranges = pywebviewFindState.ranges;
+  if (!ranges.length || !pywebviewFindUseCssHighlight()) return;
+
+  try {
+    CSS.highlights.delete('coc-pyw-find');
+    CSS.highlights.delete('coc-pyw-find-active');
+  } catch (_) {
+    /* ignore */
+  }
+
+  const n = ranges.length;
+  if (idx < 0) {
+    try {
+      CSS.highlights.set('coc-pyw-find', new Highlight(...ranges));
+    } catch (_) {
+      /* ignore */
+    }
+    return;
+  }
+
+  const safeIdx = ((idx % n) + n) % n;
+  const inactive = ranges.filter((_, i) => i !== safeIdx);
+  try {
+    if (inactive.length) {
+      CSS.highlights.set('coc-pyw-find', new Highlight(...inactive));
+    }
+    if (ranges[safeIdx]) {
+      CSS.highlights.set('coc-pyw-find-active', new Highlight(ranges[safeIdx]));
+    }
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+function updatePywebviewFindCounter() {
+  const el = document.getElementById('pywebviewFindCounter');
+  if (!el) return;
+  const q = pywebviewFindState.query.trim();
+  if (!q) {
+    el.textContent = '';
+    return;
+  }
+  const n = pywebviewFindMatchTotal();
+  if (n === 0) {
+    el.textContent = 'Нет совпадений';
+    return;
+  }
+  const i = pywebviewFindState.currentIndex;
+  el.textContent = i < 0 ? `— / ${n}` : `${i + 1} / ${n}`;
+}
+
+function scrollPywebviewFindToIndex(i) {
+  const n = pywebviewFindMatchTotal();
+  if (n <= 0) return;
+  const safeIdx = ((i % n) + n) % n;
+  const r = pywebviewFindState.ranges[safeIdx];
+  if (r) {
+    const el =
+      r.startContainer.nodeType === Node.TEXT_NODE
+        ? r.startContainer.parentElement
+        : r.startContainer;
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth', inline: 'nearest' });
+    return;
+  }
+  const m = pywebviewFindState.markElements && pywebviewFindState.markElements[safeIdx];
+  if (m) m.scrollIntoView({ block: 'nearest', behavior: 'smooth', inline: 'nearest' });
+}
+
+function pywebviewFindNext() {
+  const n = pywebviewFindMatchTotal();
+  if (!n) return;
+  const prev = pywebviewFindState.currentIndex;
+  pywebviewFindState.currentIndex = prev < 0 ? 0 : (prev + 1) % n;
+  scrollPywebviewFindToIndex(pywebviewFindState.currentIndex);
+  syncPywebviewFindHighlights();
+  updatePywebviewFindCounter();
+}
+
+function runPywebviewFind() {
+  const input = document.getElementById('pywebviewFindInput');
+  const q = input ? input.value.trim() : '';
+  pywebviewFindState.query = q;
+  clearPywebviewFindHighlights();
+  pywebviewFindState.ranges = [];
+  pywebviewFindState.markElements = null;
+  pywebviewFindState.currentIndex = -1;
+  if (!q) {
+    updatePywebviewFindCounter();
+    return;
+  }
+  const ranges = collectPywebviewFindRanges(q.toLowerCase());
+  pywebviewFindState.ranges = ranges;
+  if (!ranges.length) {
+    updatePywebviewFindCounter();
+    return;
+  }
+  if (pywebviewFindUseCssHighlight()) {
+    try {
+      syncPywebviewFindHighlights();
+    } catch (_) {
+      applyPywebviewFindMarks(ranges);
+      pywebviewFindState.markElements = Array.from(document.querySelectorAll('mark.coc-pyw-find-mark'));
+      pywebviewFindState.ranges = [];
+      syncPywebviewFindHighlights();
+    }
+  } else {
+    applyPywebviewFindMarks(ranges);
+    pywebviewFindState.markElements = Array.from(document.querySelectorAll('mark.coc-pyw-find-mark'));
+    pywebviewFindState.ranges = [];
+    syncPywebviewFindHighlights();
+  }
+  updatePywebviewFindCounter();
+}
+
+function closePywebviewFind() {
+  const bar = document.getElementById('pywebviewFindBar');
+  const input = document.getElementById('pywebviewFindInput');
+  if (bar) bar.hidden = true;
+  if (input) input.value = '';
+  pywebviewFindState.open = false;
+  pywebviewFindState.query = '';
+  pywebviewFindState.ranges = [];
+  pywebviewFindState.markElements = null;
+  pywebviewFindState.currentIndex = -1;
+  clearPywebviewFindHighlights();
+  const c = document.getElementById('pywebviewFindCounter');
+  if (c) c.textContent = '';
+}
+
+function openPywebviewFind() {
+  const bar = document.getElementById('pywebviewFindBar');
+  const input = document.getElementById('pywebviewFindInput');
+  if (!bar || !input) return;
+  pywebviewFindState.open = true;
+  bar.hidden = false;
+  requestAnimationFrame(() => {
+    input.focus();
+    input.select();
+    runPywebviewFind();
+  });
+}
+
+function refreshPywebviewFindAfterRender() {
+  if (!window.pywebview || !pywebviewFindState.open) return;
+  const input = document.getElementById('pywebviewFindInput');
+  if (!input || !input.value.trim()) return;
+  runPywebviewFind();
+}
+
+function appendPywebviewFindHelpHotkey() {
+  const hotkeysEl = document.getElementById('helpHotkeys');
+  if (!hotkeysEl || hotkeysEl.dataset.pywebviewFindHelp === '1') return;
+  hotkeysEl.dataset.pywebviewFindHelp = '1';
+  const dl = hotkeysEl.querySelector('dl');
+  if (dl) {
+    dl.insertAdjacentHTML(
+      'beforeend',
+      '<dt>Ctrl+F</dt><dd>Поиск по текущей вкладке (окно приложения)</dd>'
+    );
+  }
+}
+
+function tryInitPywebviewFind() {
+  if (!window.pywebview || pywebviewFindInitialized) return;
+  const input = document.getElementById('pywebviewFindInput');
+  if (!input) return;
+  pywebviewFindInitialized = true;
+
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      if (!window.pywebview) return;
+      if ((e.key === 'F' || e.key === 'А' || e.key === 'а' || e.key === 'f') && e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        openPywebviewFind();
+        return;
+      }
+      if (e.key === 'Escape' && pywebviewFindState.open) {
+        e.preventDefault();
+        closePywebviewFind();
+      }
+    },
+    true
+  );
+
+  input.addEventListener('input', () => {
+    runPywebviewFind();
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      pywebviewFindNext();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closePywebviewFind();
+    }
+  });
+
+  appendPywebviewFindHelpHotkey();
+}
+
+tryInitPywebviewFind();
+window.addEventListener('pywebviewready', tryInitPywebviewFind);
+
+load();
+setupUI();
+render();
 
 // Ждём, пока pywebview и его API будут готовы, затем подтягиваем последнее автосохранение.
 // Это гарантирует, что при старте exe‑версии загрузится последний autosave.json.

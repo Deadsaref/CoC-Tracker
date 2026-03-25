@@ -4,18 +4,32 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>CoC Tracker</title>
+  <link rel="stylesheet" href="vendor/flatpickr.min.css" />
   <link rel="stylesheet" href="style.css" />
   <link rel="icon" type="image/png" href="img/favicon.ico" />
 </head>
 <body>
   <div id="tooltip"></div>
   <div id="toastContainer" class="toast-container"></div>
+  <div id="pywebviewFindBar" class="pywebview-find-bar" hidden>
+    <label class="pywebview-find-label" for="pywebviewFindInput">Поиск</label>
+    <input
+      type="search"
+      id="pywebviewFindInput"
+      class="pywebview-find-input"
+      autocomplete="off"
+      spellcheck="false"
+      placeholder="Найти на вкладке…"
+      enterkeyhint="search"
+    />
+    <span id="pywebviewFindCounter" class="pywebview-find-counter" aria-live="polite"></span>
+  </div>
   <div class="tracker investigator-mode">
     <header class="tracker-header">
       <div class="header-top">
         <div class="title-block">
           <h1 class="app-title" id="appTitle">CoC Tracker</h1>
-          <span class="app-version">v0.45</span>
+          <span class="app-version">v0.48</span>
         </div>
       </div>
       
@@ -30,11 +44,62 @@
       <div class="header-actions">
         <div class="header-actions-left">
           <button id="newInvestigatorBtn" class="stat-btn investigator-only">Новый персонаж</button>
-          <button id="newDayBtn" class="stat-btn investigator-only">Новый день</button>
+          <div class="scene-menu-wrap">
+            <button
+              type="button"
+              id="sceneMenuToggle"
+              class="stat-btn scene-menu-toggle"
+              aria-expanded="false"
+              aria-controls="scenePanel"
+              aria-haspopup="dialog"
+              title="Сцена: дата, имя файла, экспорт и импорт"
+            >
+              <span class="scene-menu-toggle__main">Сцена</span>
+              <span id="sceneMenuSavePreview" class="scene-menu-toggle__name">Untitled</span>
+              <span class="scene-menu-toggle__chevron" aria-hidden="true">▾</span>
+            </button>
+            <div
+              id="scenePanel"
+              class="scene-panel"
+              role="dialog"
+              aria-labelledby="sceneMenuToggle"
+              hidden
+            >
+              <div class="scene-panel__section investigator-only">
+                <span class="scene-panel__label">Игровая дата</span>
+                <p class="scene-panel__hint">Календарь, день кампании и события</p>
+                <div class="scene-date-field">
+                  <input
+                    type="text"
+                    id="campaignDatePicker"
+                    class="campaign-date-picker-input"
+                    readonly
+                    title="Игровая дата: календарь, текущий день кампании и события"
+                    aria-label="Игровая дата"
+                  />
+                </div>
+              </div>
+              <div class="scene-panel__section">
+                <span class="scene-panel__label">Имя сцены</span>
+                <div class="scene-panel__save-row">
+                  <span id="saveNameDisplay" class="save-name">Untitled</span>
+                  <input id="saveNameInput" class="save-name-input" type="text" style="display:none" />
+                </div>
+                <p class="scene-panel__hint scene-panel__hint--sub">Двойной клик по имени — изменить</p>
+              </div>
+              <div class="scene-panel__actions">
+                <input type="file" id="importFile" accept="application/json" hidden />
+                <button type="button" id="exportBtn" class="stat-btn">Экспорт</button>
+                <button type="button" id="importBtn" class="stat-btn">Импорт</button>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="header-actions-right">
-          <button id="undoBtn" title="Откатить шаг" disabled class="stat-btn">⟲</button>
-          <button id="redoBtn" title="Повторить шаг" disabled class="stat-btn">⟳</button>
+          <div class="undo-redo-group" title="История изменений">
+            <button id="undoBtn" title="Откатить шаг" disabled class="stat-btn">⟲</button>
+            <button id="redoBtn" title="Повторить шаг" disabled class="stat-btn">⟳</button>
+          </div>
         </div>
       </div>
     </header>
@@ -86,17 +151,55 @@
           <th data-sort="cost" class="grimoire-only">Стоимость</th>
           <th data-sort="time" class="grimoire-only">Время сотворения</th>
           <th>Заметка</th>
+          <th class="investigator-only col-actions" aria-label="Действия"></th>
+          <th class="arsenal-only col-actions" aria-label="Удалить"></th>
+          <th class="grimoire-only col-actions" aria-label="Удалить"></th>
         </tr>
       </thead>
       <tbody id="tableBody"></tbody>
     </table>
     </div>
-    <div class="import-export">
-      <span id="saveNameDisplay" class="save-name">Untitled</span>
-      <input id="saveNameInput" class="save-name-input" type="text" style="display:none" />
-      <button id="exportBtn" class="stat-btn">Экспорт</button>
-      <input type="file" id="importFile" accept="application/json" hidden>
-      <button id="importBtn" class="stat-btn">Импорт</button>
+
+    <!-- Ширма (только вкладка «Персонажи» — см. .tracker.investigator-mode) -->
+    <div id="keeperScreen" class="keeper-screen">
+      <div class="keeper-screen-header">
+        <div class="keeper-label-wrap">
+          <button
+            type="button"
+            id="keeperMenuToggle"
+            class="keeper-rpg-label"
+            aria-expanded="false"
+            aria-controls="keeperSideMenu"
+            title="Меню ширмы"
+          >
+            Ширма
+          </button>
+          <aside
+            id="keeperSideMenu"
+            class="keeper-side-menu"
+            aria-hidden="true"
+            role="dialog"
+            aria-labelledby="keeperMenuToggle"
+          >
+            <div class="keeper-side-menu__panel">
+              <input type="file" id="keeperImportFile" accept="application/json" hidden />
+              <button type="button" id="keeperExportBtn" class="keeper-menu-btn" title="Экспорт скрытых персонажей" data-keeper-menu-item>
+                Экспорт
+              </button>
+              <button type="button" id="keeperImportBtn" class="keeper-menu-btn" title="Добавить персонажей из файла в ширму" data-keeper-menu-item>
+                Импорт
+              </button>
+              <button type="button" id="keeperClearBtn" class="keeper-menu-btn keeper-menu-btn--danger" title="Очистить ширму" data-keeper-menu-item>
+                Очистить
+              </button>
+              <button type="button" id="keeperMenuClose" class="keeper-menu-btn keeper-menu-btn--close" data-keeper-menu-item>
+                Свернуть
+              </button>
+            </div>
+          </aside>
+        </div>
+      </div>
+      <div id="keeperScreenList" class="keeper-screen-list"></div>
     </div>
   </div>
 
@@ -131,14 +234,6 @@
     <button id="combatClearEffects" class="combat-panel-btn" title="Сбросить все состояния">🧹</button>
     <button id="combatEnd" class="combat-panel-btn combat-end-btn" title="Закончить бой">✕</button>
   </div>
-
-  <!-- Тут Ширма -->
-  <div id="keeperScreen" class="keeper-screen">
-  <h3>Ширма</h3>
-  <table>
-    <tbody id="keeperBody"></tbody>
-  </table>
-</div>
   <div id="investigatorModal" class="modal hidden">
     <div class="modal-overlay" onclick="closeInvestigatorModal()"></div>
 
@@ -199,6 +294,17 @@
     </div>
   </div>
 
+  <div id="deleteInvestigatorModal" class="modal hidden">
+    <div class="modal-overlay" onclick="closeDeleteInvestigatorModal()"></div>
+    <div class="modal-content delete-investigator-modal">
+      <p id="deleteInvestigatorMessage" class="delete-confirm-message"></p>
+      <div class="modal-actions">
+        <button id="deleteInvestigatorConfirmBtn" type="button" onclick="confirmDeleteInvestigator()">Да</button>
+        <button type="button" onclick="closeDeleteInvestigatorModal()">Нет</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Модальное окно помощи (F1) -->
   <div id="helpModal" class="modal hidden">
     <div class="modal-overlay" onclick="closeHelpModal()"></div>
@@ -224,23 +330,39 @@
           <div class="help-text help-features" id="helpFeatures">
             <details open>
               <summary>Персонажи и характеристики</summary>
-              <p>Ведение списка персонажей, их характеристик, учет здоровья (ПЗ), рассудка (РАС), базовой скорости и заметок. Подсветка критически низкого РАС и всплывающие подсказки по характеристикам.</p>
+              <p>Основной режим ведёт таблицу сыщиков: имя, ПЗ, бонус к урону (БкУ) от СИЛ и ТЕЛ, ЛВК, скорость движения, РАС, навыки боя в одной строке и текстовая заметка. Это опорная «карточка» для сессии: быстрый доступ к числам без бумажного листа.</p>
+              <p>ПЗ и РАС меняются кнопками «−»/«+»; по ПЗ и РАС при наведении показываются подсказки (в т.ч. максимумы и пороги). Если текущий РАС не выше четырёх пятых от сохранённого базового значения, ячейка подсвечивается; клик по ячейке делает текущий РАС новой базой и снимает предупреждение.</p>
+              <p>По клику на ЛВК включается отметка «буст» (подсветка): для сортировки и отображения инициативы персонаж временно считается быстрее — удобно помечать, кто действует первым в этом раунде, не переписывая число.</p>
+              <p>Скорость можно сдвигать на один шаг вверх или вниз от расчётного значения — для временных эффектов, ранений и домашних правил; пределы кнопок не дают уйти дальше одного модификатора.</p>
+              <p>Двойной клик по имени открывает редактирование всех полей; в этом же окне доступно клонирование строки. Строки можно перетаскивать, меняя порядок в таблице. Заголовки колонок задают сортировку (повторный клик — обратный порядок).</p>
             </details>
             <details>
               <summary>Арсенал и гримуар</summary>
-              <p>Отдельные вкладки для оружия и заклинаний, привязка оружия и спеллов к персонажам, отображение урона с учётом бонуса к урону персонажа. Наполняйте вкладки оружием и спеллами, которые вы используете в игре.</p>
+              <p>Вкладки «Арсенал» и «Гримуар» хранят отдельные справочники: оружие (урон, дальность, флаг бонуса к урону) и заклинания (стоимость, время сотворения, описание). Их имеет смысл заполнять тем, что реально встречается в кампании — дальше вы привязываете записи к персонажам.</p>
+              <p>У сыщика в колонке «Бой» через поле ввода с подсказками добавляются теги оружия и заклинаний. Для оружия при наведении на тег показывается итоговая строка урона с учётом бонуса к урону персонажа (БкУ) и пометки «бонус» у записи в арсенале; для заклинаний — стоимость, время и текст из гримуара.</p>
             </details>
             <details>
               <summary>Бой и раунды</summary>
-              <p>Управление раундами боя, выделение активного участника, интеграция с состояниями персонажей и их длительностью.</p>
+              <p>Режим боя включается с панели в шапке (есть горячие клавиши — см. вкладку «Горячие клавиши»). Пока бой идёт, в таблице выделяется текущий участник; счётчик показывает номер раунда.</p>
+              <p>Переход «к следующему» по списку строк двигает выделение вниз; после последней строки ход переходит к первой и номер раунда увеличивается. Движение вверх в начале списка возвращает к последнему участнику предыдущего раунда. Так вы ведёте порядок ходов и одновременно даёте приложению сигнал «сменился раунд».</p>
+              <p>Смена раунда (вперёд или назад) связана с таймерами состояний — см. следующий раздел. Отдельная кнопка сбрасывает все состояния у всех персонажей после подтверждения — на случай конца сцены или ошибки.</p>
             </details>
             <details>
               <summary>Состояния и эффекты</summary>
-              <p>Радиальное меню состояний открывается по ПКМ по персонажу и выбору состояния, управление длительностью эффектов в раундах, автоматический тик эффектов при переходе между раундами.</p>
+              <p>ПКМ по имени персонажа открывает радиальное меню типовых последствий провалов РАС и тяжёлых ситуаций (без сознания, амнезия, буйство, расстройство, паранойя, бегство, взрыв эмоций, фобия/мания, серьёзная рана, затаённое безумие). Уже активные варианты в меню недоступны, пока эффект не снят.</p>
+              <p>Два типа срабатывания. «Мгновенные» (серьёзная рана, затаённое безумие) добавляются одним кликом по сегменту — без ввода числа. Остальные после выбора просят ввести целое число ходов (раундов действия) и подтвердить Enter: столько полных циклов «мой ход прошёл по всем участникам» эффект будет отмечен на карточке.</p>
+              <p>Когда в бою счётчик раунда увеличивается на единицу, у всех таких эффектов оставшаяся длительность уменьшается на 1; при откате раунда назад — увеличивается. У мгновенных эффектов счётчик не показывается; у длительных на бейдже видно, сколько ходов осталось. Когда длительность доходит до нуля, бейдж становится «просроченным» — клик по нему удаляет метку, когда вы отыграли окончание эффекта.</p>
             </details>
             <details>
-              <summary>Импорт, экспорт и снапшоты</summary>
-              <p>Экспорт/импорт состояния трекера в JSON, авто‑снапшоты в локальное хранилище для защиты от потерь данных.</p>
+              <summary>Сцена: календарь, имя файла, импорт и экспорт</summary>
+              <p>Меню «Сцена» задаёт имя текущего набора данных (как у файла сессии), открывает экспорт и импорт всего состояния трекера в JSON — для бэкапа, переноса на другой компьютер или версии под упаковкой в exe.</p>
+              <p>Блок «Игровая дата» доступен на вкладке персонажей: календарь кампании, текущий день и заметки по выбранным датам. Кнопка делает выбранную в календаре дату «сегодняшним» днём кампании. Если этот день позже предыдущего, у каждого сыщика базовый РАС переносится на текущее значение и снимается подсветка предупреждения — удобно между сессиями или после «отдыха» в сюжете.</p>
+              <p>Данные автоматически сохраняются в локальное хранилище браузера; в десктопной оболочке дополнительно периодически пишется автосейв на диск и при закрытии окна.</p>
+            </details>
+            <details>
+              <summary>Ширма, история правок и прочее</summary>
+              <p>Внизу экрана на вкладке «Персонажи» — панель ширмы: список скрытых карточек (например НПС до раскрытия). Запись можно показать в общей таблице или убрать обратно; отдельные импорт/экспорт и очистка относятся только к этому списку.</p>
+              <p>Кнопки с стрелками в шапке откатывают и повторяют последние изменения (Undo/Redo), чтобы исправить случайный клик без ручного восстановления из файла.</p>
             </details>
           </div>
         </div>
@@ -252,6 +374,8 @@
     </div>
   </div>
 
+  <script src="vendor/flatpickr.min.js"></script>
+  <script src="vendor/ru.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
